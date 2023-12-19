@@ -1,13 +1,15 @@
 {
-	"token": "insert token here",
-	"application_id": 767487399176962058,
+	"token": "",
+	"application_id": 1183741625986465803,
+	"guild_id": 1139900310081507398,
 	
-	"admin_roles": {"445404006177570829": ["Administrator", "Lounge Staff"]},
-	"staff_roles": {"445404006177570829": [910528103225389107]},
+	"admin_roles": {"1139900310081507398": ["Administrator", "Lounge Staff"]},
+	"staff_roles": {"1139900310081507398": [910528103225389107]},
 	
-	"mogichannel": 772517883107475516,
+	"queue_join_channel": 1139900310861660163,
+    "queue_sub_channel": 1186097268240162846,
 
-	"members_for_channels": {"445404006177570829": [743532508343304242, 459860530618695681, 735910635082219570]},
+	"members_for_channels": {"1139900310081507398": [743532508343304242, 459860530618695681, 735910635082219570]},
 
 	"channel_category_position": 5,
 	"channels_per_category": 25,
@@ -20,7 +22,7 @@
 	"url": "https://www.mk8dx-lounge.com",
 
 	"TIME_ADJUSTMENT": 0,
-	"QUEUE_OPEN_TIME": 75,
-	"JOINING_TIME": 60,
-	"EXTENSION_TIME": 5
+	"QUEUE_OPEN_TIME": 60,
+	"JOINING_TIME": 50,
+	"EXTENSION_TIME": 3
 }
