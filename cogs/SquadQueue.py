@@ -8,6 +8,7 @@ import time
 import json
 from mmr import mk8dx_150cc_mmr, get_mmr_from_discord_id, mk8dx_150cc_fc
 from mogi_objects import Mogi, Team, Player, Room, VoteView, JoinView
+from io import StringIO
 import asyncio
 
 # Scheduled_Event = collections.namedtuple('Scheduled_Event', 'size time started mogi_channel')
@@ -21,6 +22,8 @@ class SquadQueue(commands.Cog):
         self.scheduled_events = {}
         # keys are discord.TextChannel objects, values are instances of Mogi
         self.ongoing_events = {}
+
+        self.old_events = {}
 
         self._que_scheduler = self.que_scheduler.start()
         self._scheduler_task = self.sqscheduler.start()
@@ -55,8 +58,9 @@ class SquadQueue(commands.Cog):
             self.bot.config["queue_join_channel"])
         self.SUB_CHANNEL = self.bot.get_channel(
             self.bot.config["queue_sub_channel"])
-        print(self.MOGI_CHANNEL, flush=True)
-        print(self.GUILD, flush=True)
+        print(f"Server - {self.GUILD}", flush=True)
+        print(f"Join Channel - {self.MOGI_CHANNEL}", flush=True)
+        print(f"Sub Channel - {self.SUB_CHANNEL}", flush=True)
         print("Ready!", flush=True)
 
     async def lockdown(self, channel: discord.TextChannel):
@@ -134,6 +138,7 @@ class SquadQueue(commands.Cog):
         member = ctx.user
         mogi = self.get_mogi(ctx)
         if mogi is None:
+            await ctx.response.send_message("Mogi has not started yet.")
             return
         if (not await self.is_started(ctx, mogi)
                 or not await self.is_gathering(ctx, mogi)):
@@ -154,17 +159,17 @@ class SquadQueue(commands.Cog):
             await ctx.response.send_message(msg)
             return
 
+        msg = ""
         if players[0].mmr is None:
             players[0].mmr = 0
-            msg = f"{players[0].lounge_name} has no MMR, they will be playing this mogi with a starting MMR of 0."
-            msg += "If you believe this is a mistake, please contact a staff member for help."
-            await ctx.response.send_message(msg)
+            msg += f"{players[0].lounge_name} is assumed to be a new player and will be playing this mogi with a starting MMR of 0."
+            msg += "If you believe this is a mistake, please contact a staff member for help.\n"
 
         players[0].confirmed = True
         squad = Team(players)
         mogi.teams.append(squad)
 
-        await ctx.response.send_message(f"{players[0].lounge_name} has joined the mogi `[{mogi.count_registered()} players]`")
+        await ctx.response.send_message(f"{players[0].lounge_name} has joined the mogi at {discord.utils.format_dt(mogi.start_time)}, `[{mogi.count_registered()} players]`")
         await self.check_room_channels(mogi)
         await self.check_num_teams(mogi)
 
@@ -175,6 +180,7 @@ class SquadQueue(commands.Cog):
         """Remove user from mogi"""
         mogi = self.get_mogi(ctx)
         if mogi is None:
+            await ctx.response.send_message("Mogi has not started yet.")
             return
         if (not await self.is_started(ctx, mogi)
                 or not await self.is_gathering(ctx, mogi)):
@@ -205,22 +211,33 @@ class SquadQueue(commands.Cog):
                 room = mogi.get_room_from_thread(ctx.channel_id)
                 is_room_thread = True
                 break
+        for mogi in self.old_events.values():
+            if mogi.is_room_thread(ctx.channel.id):
+                room = mogi.get_room_from_thread(ctx.channel.id)
+                is_room_thread = True
+                break
         if not is_room_thread:
             return
-        msg = f"Room {room.room_num} is looking for a sub with range {room.mmr_low - 500}-{room.mmr_high + 500}\n"
+        msg = ""
+        if room.room_num == 1:
+            msg += f"Room {room.room_num} is looking for a sub with mmr >{room.mmr_low - 500}\n"
+        else:
+            low = 0 if room.mmr_low < 500 else room.mmr_low - 500
+            msg += f"Room {room.room_num} is looking for a sub with range {low}-{room.mmr_high + 500}\n"
         await self.SUB_CHANNEL.send(msg)
         view = JoinView(room, get_mmr_from_discord_id)
         await self.SUB_CHANNEL.send(view=view)
         await ctx.response.send_message("Sent out request for sub.")
 
-    # @app_commands.Cooldown(1, 120)
     @app_commands.command(name="l")
+    @app_commands.checks.cooldown(1, 120)
     @app_commands.guild_only()
     async def list(self, ctx):
         """Display the list of confirmed squads for a mogi; sends 15 at a time to avoid
            reaching 2000 character limit"""
         mogi = self.get_mogi(ctx)
         if mogi is None:
+            await ctx.response.send_message("Mogi has not started yet.")
             return
         if not await self.is_started(ctx, mogi):
             return
@@ -229,20 +246,23 @@ class SquadQueue(commands.Cog):
             await ctx.response.send_message(f"There are no players in the mogi - type `/c` to join")
             return
         sorted_mogi_list = sorted(mogi_list, reverse=True)
-        msg = f"`Current Mogi List`\n"
+        msg = f"Current Mogi List\n"
         for i in range(len(sorted_mogi_list)):
-            if len(msg) > 1500:
-                await ctx.response.send_message(msg)
-                msg = ""
-            msg += f"`{i+1}.` "
+            msg += f"{i+1}) "
             msg += ", ".join([p.lounge_name for p in sorted_mogi_list[i].players])
             msg += f" ({sorted_mogi_list[i].avg_mmr:.1f} MMR)\n"
         if (len(sorted_mogi_list) % (12/mogi.size) != 0):
             num_next = int(len(sorted_mogi_list) % (12/mogi.size))
             teams_per_room = int(12/mogi.size)
             num_rooms = int(len(sorted_mogi_list) / (12/mogi.size))+1
-            msg += f"`[{num_next}/{teams_per_room}] players for {num_rooms} rooms`"
-        await ctx.response.send_message(msg)
+            msg += f"[{num_next}/{teams_per_room}] players for {num_rooms} room(s)"
+        f = discord.File(StringIO(msg), filename="MogiData.txt")
+        await ctx.response.send_message(file=f)
+
+    @list.error  # Tell the user when they've got a cooldown
+    async def on_list_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.CommandOnCooldown):
+            await interaction.response.send_message("Wait before using `/l` command", ephemeral=True)
 
     @app_commands.command(name="scoreboard")
     async def scoreboard(self, ctx):
@@ -250,6 +270,11 @@ class SquadQueue(commands.Cog):
         is_room_thread = False
         room = None
         for mogi in self.ongoing_events.values():
+            if mogi.is_room_thread(ctx.channel.id):
+                room = mogi.get_room_from_thread(ctx.channel.id)
+                is_room_thread = True
+                break
+        for mogi in self.old_events.values():
             if mogi.is_room_thread(ctx.channel.id):
                 room = mogi.get_room_from_thread(ctx.channel.id)
                 is_room_thread = True
@@ -297,7 +322,7 @@ class SquadQueue(commands.Cog):
         m.started = True
         m.gathering = True
         self.ongoing_events[ctx.channel] = m
-        await ctx.send(f"A mogi has been started - @here Type `!c`, `!d`, or `!list`")
+        await ctx.send(f"A mogi has been started - @here Type `/c`, `/d`, or `/list`")
 
     @commands.command()
     @commands.guild_only()
@@ -317,7 +342,13 @@ class SquadQueue(commands.Cog):
         await ctx.send("Mogi is now closed; players can no longer join or drop from the event")
 
     async def endMogi(self, mogi_channel):
-        mogi = self.ongoing_events[mogi_channel]
+        # lifetime of a mogi in seconds
+        await asyncio.sleep(5400)
+        # print(self.scheduled_events, flush=True)
+        # print(self.ongoing_events, flush=True)
+        # print(self.old_events, flush=True)
+        # print(datetime.now(), flush=True)
+        mogi = self.old_events[mogi_channel]
         for room in mogi.rooms:
             if room.thread is None:
                 return
@@ -331,7 +362,7 @@ class SquadQueue(commands.Cog):
                     await room.thread.edit(locked=True)
                 except Exception as e:
                     pass
-        del self.ongoing_events[mogi_channel]
+        del self.old_events[mogi_channel]
 
     @commands.command()
     @commands.guild_only()
@@ -376,6 +407,10 @@ class SquadQueue(commands.Cog):
         """Calls staff to the current channel. Only works in thread channels for SQ rooms."""
         is_room_thread = False
         for mogi in self.ongoing_events.values():
+            if mogi.is_room_thread(ctx.channel.id):
+                is_room_thread = True
+                break
+        for mogi in self.old_events.values():
             if mogi.is_room_thread(ctx.channel.id):
                 is_room_thread = True
                 break
@@ -454,7 +489,9 @@ class SquadQueue(commands.Cog):
             return
         num_rooms = int(mogi.count_registered() / (12/mogi.size))
         if num_rooms == 0:
-            await mogi.mogi_channel.send(f"Not enough players to fill a room! Try this command with at least {int(12/mogi.size)} teams")
+            await mogi.mogi_channel.send(f"Not enough players to fill a single room! This mogi will be cancelled.")
+            self.scheduled_events = {}
+            self.ongoing_events = {}
             return
         await self.lockdown(mogi.mogi_channel)
         mogi.making_rooms_run = True
@@ -522,13 +559,13 @@ class SquadQueue(commands.Cog):
         if num_teams < mogi.count_registered():
             missed_teams = mogi.confirmed_list(
             )[num_teams:mogi.count_registered()]
-            msg = "`Late teams:`\n"
+            msg = "`Late players:`\n"
             for i in range(len(missed_teams)):
                 msg += f"`{i+1}.` "
                 msg += ", ".join([p.lounge_name for p in missed_teams[i].players])
                 msg += f" ({int(missed_teams[i].avg_mmr)} MMR)\n"
             await mogi.mogi_channel.send(msg)
-        await asyncio.sleep(60)
+        await asyncio.sleep(120)
         await self.end_voting()
 
     async def check_num_teams(self, mogi):
@@ -540,7 +577,7 @@ class SquadQueue(commands.Cog):
             if numLeftoverTeams == 0:
                 mogi.gathering = False
                 await self.lockdown(mogi.mogi_channel)
-                await mogi.mogi_channel.send("A sufficient amount of teams has been reached, so the mogi has been closed to extra teams. Rooms will be made within the next minute.")
+                await mogi.mogi_channel.send("A sufficient amount of players has been reached, so the mogi has been closed to extra players. Rooms will be made within the next minute.")
 
     async def ongoing_mogi_checks(self):
         for mogi in self.ongoing_events.values():
@@ -563,10 +600,13 @@ class SquadQueue(commands.Cog):
                             self.JOINING_TIME + self.EXTENSION_TIME
                         minutes_left = int((force_time - cur_time).seconds/60)
                         x_teams = int(int(12/mogi.size) - numLeftoverTeams)
-                        await mogi.mogi_channel.send(f"Need {x_teams} more team(s) to start immediately. Starting in {minutes_left} minute(s) regardless.")
+                        await mogi.mogi_channel.send(f"Need {x_teams} more player(s) to start immediately. Starting in {minutes_left + 1} minute(s) regardless.")
 
     async def scheduler_mogi_start(self):
         cur_time = datetime.now(timezone.utc)
+        # print(self.scheduled_events, flush=True)
+        # print(self.ongoing_events, flush=True)
+        # print(self.old_events, flush=True)
         for guild in self.scheduled_events.values():
             to_remove = []  # Keep a list of indexes to remove - can't remove while iterating
             for i, mogi in enumerate(guild):
@@ -577,13 +617,21 @@ class SquadQueue(commands.Cog):
                     else:
                         if mogi.mogi_channel in self.ongoing_events.keys():
                             if self.ongoing_events[mogi.mogi_channel].started:
-                                await self.endMogi(mogi.mogi_channel)
+                                self.old_events[mogi.mogi_channel] = self.ongoing_events[mogi.mogi_channel]
+                                del self.ongoing_events[mogi.mogi_channel]
+                                # await self.endMogi(mogi.mogi_channel)
+                                # print(self.scheduled_events, flush=True)
+                                # print(self.ongoing_events, flush=True)
+                                # print(self.old_events, flush=True)
+                                # print(datetime.now(timezone.utc), flush=True)
+                                asyncio.create_task(
+                                    self.endMogi(mogi.mogi_channel))
                         to_remove.append(i)
                         self.ongoing_events[mogi.mogi_channel] = mogi
                         mogi.started = True
                         mogi.gathering = True
                         await self.unlockdown(mogi.mogi_channel)
-                        await mogi.mogi_channel.send(f"A mogi has been started - @here Type `/c`, `/d`, or `/l`")
+                        await mogi.mogi_channel.send(f"A que is gathering for the mogi at {discord.utils.format_dt(mogi.start_time)} - @here Type `/c`, `/d`, or `/l`")
             for ind in reversed(to_remove):
                 del guild[ind]
 
@@ -615,27 +663,29 @@ class SquadQueue(commands.Cog):
 
     async def schedule_que_event(self):
         """Schedules que for the next hour in the given channel."""
-        truncated_time = datetime.now(timezone.utc).replace(
-            minute=0, second=0, microsecond=0)
-        next_hour = truncated_time + timedelta(hours=1)
-        for mogi in self.ongoing_events.values():
-            if mogi.start_time == next_hour:
+        if self.GUILD is not None:
+            if datetime.now().minute >= self.bot.config["JOINING_TIME"]:
+                # print("Hourly Que is too late, starting Que at next hour", flush=True)
                 return
-        event_start_time = next_hour.astimezone() - self.QUEUE_OPEN_TIME
-        event_end_time = event_start_time + self.JOINING_TIME
-        if event_start_time < discord.utils.utcnow():
-            event_start_time = discord.utils.utcnow() + timedelta(minutes=1)
-        discord_event = await self.GUILD.create_scheduled_event(name=f"Hourly Que {next_hour}",
-                                                                start_time=event_start_time,
-                                                                end_time=event_end_time,
-                                                                entity_type=discord.EntityType.external,
-                                                                location=self.MOGI_CHANNEL.mention)
-        mogi = Mogi(1, 1, self.MOGI_CHANNEL, is_automated=True,
-                    start_time=next_hour, discord_event=discord_event)
-        if self.GUILD not in self.scheduled_events.keys():
-            self.scheduled_events[self.GUILD] = []
-        self.scheduled_events[self.GUILD].append(mogi)
-        print(f"Started Que for {next_hour}", flush=True)
+            truncated_time = datetime.now(timezone.utc).replace(
+                minute=0, second=0, microsecond=0)
+            next_hour = truncated_time + timedelta(hours=1)
+            for mogi in self.ongoing_events.values():
+                if mogi.start_time == next_hour:
+                    return
+            event_start_time = next_hour.astimezone() - self.QUEUE_OPEN_TIME
+            if event_start_time < discord.utils.utcnow():
+                event_start_time = discord.utils.utcnow() + timedelta(minutes=1)
+
+            mogi = Mogi(1, 1, self.MOGI_CHANNEL, is_automated=True,
+                        start_time=next_hour)
+
+            if self.GUILD not in self.scheduled_events.keys():
+                self.scheduled_events[self.GUILD] = []
+
+            self.scheduled_events[self.GUILD].append(mogi)
+
+            print(f"Started Que for {next_hour}", flush=True)
 
     def getTime(self, schedule_time: str, timezone: str):
         """Returns a DateTime object representing the UTC equivalent of the given time."""
@@ -686,7 +736,7 @@ class SquadQueue(commands.Cog):
     @commands.command(name="sync_server")
     @commands.is_owner()
     async def sync_server(self, ctx):
-        await self.bot.tree.sync(guild=discord.Object(id=1139900310081507398))
+        await self.bot.tree.sync(guild=discord.Object(id=self.bot.config["guild_id"]))
         await ctx.send("sync'd")
 
     # @commands.command()
@@ -709,7 +759,7 @@ class SquadQueue(commands.Cog):
                                                            auto_archive_duration=60)
             await asyncio.sleep(2)
 
-    @commands.command(name="debug_add_players")
+    @commands.command(name="debug_add_team")
     @commands.is_owner()
     async def debug_add_players(self, ctx, members: commands.Greedy[discord.Member]):
         mogi = self.get_mogi(ctx)
@@ -727,12 +777,6 @@ class SquadQueue(commands.Cog):
         for i, player in enumerate(players):
             if player is None:
                 not_found.append(check_players[i].display_name)
-        if len(not_found) > 0:
-            msg = f"{ctx.author.mention} MMR for the following players could not be found: "
-            msg += ", ".join(not_found)
-            msg += ". Please contact a staff member for help"
-            await self.queue_or_send(ctx, msg)
-            return
         players[0].confirmed = True
         squad = Team(players)
         for i in range(0, 12):
@@ -760,17 +804,11 @@ class SquadQueue(commands.Cog):
         for i, player in enumerate(players):
             if player is None:
                 not_found.append(check_players[i].display_name)
-        if len(not_found) > 0:
-            msg = f"{ctx.author.mention} MMR for the following players could not be found: "
-            msg += ", ".join(not_found)
-            msg += ". Please contact a staff member for help"
-            await self.queue_or_send(ctx, msg)
-            return
         players[0].confirmed = True
         squad = Team(players)
-        for i in range(0, 700):
+        for i in range(0, 24):
             mogi.teams.append(squad)
-        msg = f"{players[0].lounge_name} added 700 times."
+        msg = f"{players[0].lounge_name} added 24 times."
         await self.queue_or_send(ctx, msg)
         await self.check_room_channels(mogi)
         await self.check_num_teams(mogi)

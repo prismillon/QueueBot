@@ -5,7 +5,7 @@ from discord.ui import View
 
 class Mogi:
     def __init__(self, sq_id: int, size: int, mogi_channel: discord.TextChannel,
-                 is_automated=False, start_time=None, discord_event=None):
+                 is_automated=False, start_time=None):
         self.started = False
         self.gathering = False
         self.making_rooms_run = False
@@ -15,7 +15,6 @@ class Mogi:
         self.teams = []
         self.rooms = []
         self.is_automated = is_automated
-        self.discord_event = discord_event
         if not is_automated:
             self.start_time = None
         else:
@@ -194,8 +193,8 @@ class VoteView(View):
 
         self.mogi.get_room_from_thread(self.thread.id).teams = teams
 
+        self.found_winner = True
         await self.thread.send(msg)
-        return
 
     async def find_winner(self):
         if not self.found_winner:
@@ -230,86 +229,86 @@ class VoteView(View):
 
     @discord.ui.button(label="FFA: 0", custom_id="FFA")
     async def one_button_callback(self, interaction, button):
-        if interaction.user.id in self["FFA"]:
-            self["FFA"].remove(interaction.user.id)
-        else:
-            if interaction.user.id in self["2v2"]:
-                self["2v2"].remove(interaction.user.id)
-            if interaction.user.id in self["3v3"]:
-                self["3v3"].remove(interaction.user.id)
-            if interaction.user.id in self["4v4"]:
-                self["4v4"].remove(interaction.user.id)
-            self["FFA"].append(interaction.user.id)
-        if len(self["FFA"]) == 6:
-            self.found_winner = True
-            await self.make_teams((1, "FFA"))
-        for curr_button in self.children:
-            curr_button.label = f"{curr_button.custom_id}: {len(self[curr_button.custom_id])}"
+        if not self.found_winner:
+            if interaction.user.id in self["FFA"]:
+                self["FFA"].remove(interaction.user.id)
+            else:
+                if interaction.user.id in self["2v2"]:
+                    self["2v2"].remove(interaction.user.id)
+                if interaction.user.id in self["3v3"]:
+                    self["3v3"].remove(interaction.user.id)
+                if interaction.user.id in self["4v4"]:
+                    self["4v4"].remove(interaction.user.id)
+                self["FFA"].append(interaction.user.id)
             if len(self["FFA"]) == 6:
-                curr_button.disabled = True
+                await self.make_teams((1, "FFA"))
+            for curr_button in self.children:
+                curr_button.label = f"{curr_button.custom_id}: {len(self[curr_button.custom_id])}"
+                if len(self["FFA"]) == 6:
+                    curr_button.disabled = True
         await interaction.response.edit_message(view=self)
 
     @discord.ui.button(label="2v2: 0", custom_id="2v2")
     async def two_button_callback(self, interaction, button):
-        if interaction.user.id in self["2v2"]:
-            self["2v2"].remove(interaction.user.id)
-        else:
-            if interaction.user.id in self["FFA"]:
-                self["FFA"].remove(interaction.user.id)
-            if interaction.user.id in self["3v3"]:
-                self["3v3"].remove(interaction.user.id)
-            if interaction.user.id in self["4v4"]:
-                self["4v4"].remove(interaction.user.id)
-            self["2v2"].append(interaction.user.id)
-        if len(self["2v2"]) == 6:
-            self.found_winner = True
-            await self.make_teams((2, "2v2"))
-        for curr_button in self.children:
-            curr_button.label = f"{curr_button.custom_id}: {len(self[curr_button.custom_id])}"
+        if not self.found_winner:
+            if interaction.user.id in self["2v2"]:
+                self["2v2"].remove(interaction.user.id)
+            else:
+                if interaction.user.id in self["FFA"]:
+                    self["FFA"].remove(interaction.user.id)
+                if interaction.user.id in self["3v3"]:
+                    self["3v3"].remove(interaction.user.id)
+                if interaction.user.id in self["4v4"]:
+                    self["4v4"].remove(interaction.user.id)
+                self["2v2"].append(interaction.user.id)
             if len(self["2v2"]) == 6:
-                curr_button.disabled = True
+                await self.make_teams((2, "2v2"))
+            for curr_button in self.children:
+                curr_button.label = f"{curr_button.custom_id}: {len(self[curr_button.custom_id])}"
+                if len(self["2v2"]) == 6:
+                    curr_button.disabled = True
         await interaction.response.edit_message(view=self)
 
     @discord.ui.button(label="3v3: 0", custom_id="3v3")
     async def three_button_callback(self, interaction, button):
-        if interaction.user.id in self["3v3"]:
-            self["3v3"].remove(interaction.user.id)
-        else:
-            if interaction.user.id in self["FFA"]:
-                self["FFA"].remove(interaction.user.id)
-            if interaction.user.id in self["2v2"]:
-                self["2v2"].remove(interaction.user.id)
-            if interaction.user.id in self["4v4"]:
-                self["4v4"].remove(interaction.user.id)
-            self["3v3"].append(interaction.user.id)
-        if len(self["3v3"]) == 6:
-            self.found_winner = True
-            await self.make_teams((3, "3v3"))
-        for curr_button in self.children:
-            curr_button.label = f"{curr_button.custom_id}: {len(self[curr_button.custom_id])}"
+        if not self.found_winner:
+            if interaction.user.id in self["3v3"]:
+                self["3v3"].remove(interaction.user.id)
+            else:
+                if interaction.user.id in self["FFA"]:
+                    self["FFA"].remove(interaction.user.id)
+                if interaction.user.id in self["2v2"]:
+                    self["2v2"].remove(interaction.user.id)
+                if interaction.user.id in self["4v4"]:
+                    self["4v4"].remove(interaction.user.id)
+                self["3v3"].append(interaction.user.id)
             if len(self["3v3"]) == 6:
-                curr_button.disabled = True
+                await self.make_teams((3, "3v3"))
+            for curr_button in self.children:
+                curr_button.label = f"{curr_button.custom_id}: {len(self[curr_button.custom_id])}"
+                if len(self["3v3"]) == 6:
+                    curr_button.disabled = True
         await interaction.response.edit_message(view=self)
 
     @discord.ui.button(label="4v4: 0", custom_id="4v4")
     async def four_button_callback(self, interaction, button):
-        if interaction.user.id in self["4v4"]:
-            self["4v4"].remove(interaction.user.id)
-        else:
-            if interaction.user.id in self["FFA"]:
-                self["FFA"].remove(interaction.user.id)
-            if interaction.user.id in self["2v2"]:
-                self["2v2"].remove(interaction.user.id)
-            if interaction.user.id in self["3v3"]:
-                self["3v3"].remove(interaction.user.id)
-            self["4v4"].append(interaction.user.id)
-        if len(self["4v4"]) == 6:
-            self.found_winner = True
-            await self.make_teams((4, "4v4"))
-        for curr_button in self.children:
-            curr_button.label = f"{curr_button.custom_id}: {len(self[curr_button.custom_id])}"
+        if not self.found_winner:
+            if interaction.user.id in self["4v4"]:
+                self["4v4"].remove(interaction.user.id)
+            else:
+                if interaction.user.id in self["FFA"]:
+                    self["FFA"].remove(interaction.user.id)
+                if interaction.user.id in self["2v2"]:
+                    self["2v2"].remove(interaction.user.id)
+                if interaction.user.id in self["3v3"]:
+                    self["3v3"].remove(interaction.user.id)
+                self["4v4"].append(interaction.user.id)
             if len(self["4v4"]) == 6:
-                curr_button.disabled = True
+                await self.make_teams((4, "4v4"))
+            for curr_button in self.children:
+                curr_button.label = f"{curr_button.custom_id}: {len(self[curr_button.custom_id])}"
+                if len(self["4v4"]) == 6:
+                    curr_button.disabled = True
         await interaction.response.edit_message(view=self)
 
 
@@ -322,6 +321,8 @@ class JoinView(View):
     @discord.ui.button(label="Join Room")
     async def button_callback(self, interaction, button):
         user_mmr = await self.get_mmr(interaction.user.id)
+        if self.room.room_num == 1:
+            self.room.mmr_high = 999999
         if isinstance(user_mmr, int) and user_mmr < self.room.mmr_high + 500 and user_mmr > self.room.mmr_low - 500:
             button.disabled = True
             await interaction.response.edit_message(view=self)

@@ -9,7 +9,7 @@
 	"queue_join_channel": 1139900310861660163,
     "queue_sub_channel": 1186097268240162846,
 
-	"members_for_channels": {"1139900310081507398": [743532508343304242, 459860530618695681, 735910635082219570]},
+	"members_for_channels": {"1139900310081507398": [743532508343304242, 735910635082219570]},
 
 	"channel_category_position": 5,
 	"channels_per_category": 25,
@@ -23,6 +23,6 @@
 
 	"TIME_ADJUSTMENT": 0,
 	"QUEUE_OPEN_TIME": 60,
-	"JOINING_TIME": 50,
+	"JOINING_TIME": 55,
 	"EXTENSION_TIME": 3
 }
