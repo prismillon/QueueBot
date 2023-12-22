@@ -20,7 +20,7 @@ async def mk8dx_150cc_mmr(url, members):
                     continue
                 player_data = await resp.json()
                 if 'mmr' not in player_data.keys():
-                    players.append(None)
+                    players.append(Player(member, player_data['name'], None))
                     continue
                 players.append(
                     Player(member, player_data['name'], player_data['mmr']))

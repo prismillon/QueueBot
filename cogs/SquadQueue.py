@@ -37,6 +37,8 @@ class SquadQueue(commands.Cog):
 
         self.SUB_CHANNEL = None
 
+        self.LOCK = asyncio.Lock()
+
         self.URL = bot.config["url"]
 
         # number of minutes before scheduled time that queue should open
@@ -135,71 +137,75 @@ class SquadQueue(commands.Cog):
     @app_commands.guild_only()
     async def can(self, ctx: discord.Interaction):
         """Join a mogi"""
-        member = ctx.user
-        mogi = self.get_mogi(ctx)
-        if mogi is None:
-            await ctx.response.send_message("Mogi has not started yet.")
-            return
-        if (not await self.is_started(ctx, mogi)
-                or not await self.is_gathering(ctx, mogi)):
-            return
+        await ctx.response.defer()
+        async with self.LOCK:
+            member = ctx.user
+            mogi = self.get_mogi(ctx)
+            if mogi is None:
+                await ctx.followup.send("Mogi has not started yet.")
+                return
+            if (not mogi.started or not mogi.gathering):
+                await ctx.followup.send("Mogi is not ready yet.")
+                return
 
-        player_team = mogi.check_player(member)
+            player_team = mogi.check_player(member)
 
-        if player_team is not None:
-            await ctx.response.send_message(f"{ctx.user.mention} is already signed up.")
-            return
+            if player_team is not None:
+                await ctx.followup.send(f"{ctx.user.mention} is already signed up.")
+                return
 
-        players = await mk8dx_150cc_mmr(self.URL, [member])
+            players = await mk8dx_150cc_mmr(self.URL, [member])
 
-        if players[0] is None:
-            msg = f"{ctx.user.mention} MMR for the following player could not be found: "
-            msg += ", ".join(players[0])
-            msg += ". Please contact a staff member for help"
-            await ctx.response.send_message(msg)
-            return
+            if players[0] is None:
+                msg = f"{ctx.user.mention} MMR for the following player could not be found: "
+                msg += ", ".join(ctx.user.name)
+                msg += ". Please contact a staff member for help"
+                await ctx.followup.send(msg)
+                return
 
-        msg = ""
-        if players[0].mmr is None:
-            players[0].mmr = 0
-            msg += f"{players[0].lounge_name} is assumed to be a new player and will be playing this mogi with a starting MMR of 0."
-            msg += "If you believe this is a mistake, please contact a staff member for help.\n"
+            msg = ""
+            if players[0].mmr is None:
+                players[0].mmr = 0
+                msg += f"{players[0].lounge_name} is assumed to be a new player and will be playing this mogi with a starting MMR of 0.  "
+                msg += "If you believe this is a mistake, please contact a staff member for help.\n"
 
-        players[0].confirmed = True
-        squad = Team(players)
-        mogi.teams.append(squad)
+            players[0].confirmed = True
+            squad = Team(players)
+            mogi.teams.append(squad)
 
-        await ctx.response.send_message(f"{players[0].lounge_name} has joined the mogi at {discord.utils.format_dt(mogi.start_time)}, `[{mogi.count_registered()} players]`")
-        await self.check_room_channels(mogi)
-        await self.check_num_teams(mogi)
+            msg += f"{players[0].lounge_name} has joined the mogi at {discord.utils.format_dt(mogi.start_time)}, `[{mogi.count_registered()} players]`"
 
-    # @commands.max_concurrency(number=1, wait=True)
+            await ctx.followup.send(msg)
+            await self.check_room_channels(mogi)
+            await self.check_num_teams(mogi)
+
     @app_commands.command(name="d")
     @app_commands.guild_only()
     async def drop(self, ctx: discord.Interaction):
         """Remove user from mogi"""
-        mogi = self.get_mogi(ctx)
-        if mogi is None:
-            await ctx.response.send_message("Mogi has not started yet.")
-            return
-        if (not await self.is_started(ctx, mogi)
-                or not await self.is_gathering(ctx, mogi)):
-            return
-        member = ctx.user
-        squad = mogi.check_player(member)
-        if squad is None:
-            await ctx.response.send_message(f"{member.display_name} is not currently in this event; type `/c` to join")
-            return
-        mogi.teams.remove(squad)
-        msg = "Removed "
-        msg += ", ".join([p.lounge_name for p in squad.players])
-        if len(squad.get_unconfirmed()) == 0:
-            msg += " from mogi list"
-        else:
-            msg += " from unfilled squads"
-        await ctx.response.send_message(msg)
+        await ctx.response.defer()
+        async with self.LOCK:
+            mogi = self.get_mogi(ctx)
+            if mogi is None:
+                await ctx.followup.send("Mogi has not started yet.")
+                return
+            if (not mogi.started or not mogi.gathering):
+                await ctx.followup.send("Mogi is not ready yet.")
+                return
+            member = ctx.user
+            squad = mogi.check_player(member)
+            if squad is None:
+                await ctx.followup.send(f"{member.display_name} is not currently in this event; type `/c` to join")
+                return
+            mogi.teams.remove(squad)
+            msg = "Removed "
+            msg += ", ".join([p.lounge_name for p in squad.players])
+            if len(squad.get_unconfirmed()) == 0:
+                msg += " from mogi list"
+            else:
+                msg += " from unfilled squads"
+            await ctx.followup.send(msg)
 
-    # @commands.max_concurrency(number=1, wait=True)
     @app_commands.command(name="sub")
     @app_commands.guild_only()
     async def sub(self, ctx):
@@ -233,8 +239,7 @@ class SquadQueue(commands.Cog):
     @app_commands.checks.cooldown(1, 120)
     @app_commands.guild_only()
     async def list(self, ctx):
-        """Display the list of confirmed squads for a mogi; sends 15 at a time to avoid
-           reaching 2000 character limit"""
+        """Display the list of confirmed players for a mogi"""
         mogi = self.get_mogi(ctx)
         if mogi is None:
             await ctx.response.send_message("Mogi has not started yet.")
@@ -816,9 +821,17 @@ class SquadQueue(commands.Cog):
     @commands.command(name="debug_start_rooms")
     @commands.is_owner()
     async def debug_start_rooms(self, ctx):
+        truncated_time = datetime.now(timezone.utc).replace(
+            minute=0, second=0, microsecond=0)
+        next_hour = truncated_time + timedelta(hours=1)
         for mogi in self.ongoing_events.values():
-            await self.add_teams_to_rooms(mogi, (mogi.start_time.minute) % 60, True)
-            return
+            if mogi.start_time == next_hour:
+                await self.add_teams_to_rooms(mogi, (mogi.start_time.minute) % 60, True)
+                return
+        for mogi in self.old_events.values():
+            if mogi.start_time == next_hour:
+                await self.add_teams_to_rooms(mogi, (mogi.start_time.minute) % 60, True)
+                return
 
 
 async def setup(bot):
