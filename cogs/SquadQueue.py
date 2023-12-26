@@ -28,6 +28,7 @@ class SquadQueue(commands.Cog):
         self._que_scheduler = self.que_scheduler.start()
         self._scheduler_task = self.sqscheduler.start()
         self._msgqueue_task = self.send_queued_messages.start()
+        self._end_mogis_task = self.delete_old_mogis.start()
 
         self.msg_queue = {}
 
@@ -40,6 +41,8 @@ class SquadQueue(commands.Cog):
         self.LOCK = asyncio.Lock()
 
         self.URL = bot.config["url"]
+
+        self.MOGI_LIFETIME = bot.config["MOGI_LIFETIME"]
 
         # number of minutes before scheduled time that queue should open
         self.QUEUE_OPEN_TIME = timedelta(minutes=bot.config["QUEUE_OPEN_TIME"])
@@ -200,10 +203,9 @@ class SquadQueue(commands.Cog):
             mogi.teams.remove(squad)
             msg = "Removed "
             msg += ", ".join([p.lounge_name for p in squad.players])
-            if len(squad.get_unconfirmed()) == 0:
-                msg += " from mogi list"
-            else:
-                msg += " from unfilled squads"
+            msg += f" from the mogi at {discord.utils.format_dt(mogi.start_time)}"
+            msg += f", `[{mogi.count_registered()} players]`"
+
             await ctx.followup.send(msg)
 
     @app_commands.command(name="sub")
@@ -223,6 +225,7 @@ class SquadQueue(commands.Cog):
                 is_room_thread = True
                 break
         if not is_room_thread:
+            await ctx.response.send_message(f"More than {self.MOGI_LIFETIME} minutes have passed since mogi start, the Mogi Object has been deleted.", ephemeral=True)
             return
         msg = ""
         if room.room_num == 1:
@@ -285,6 +288,7 @@ class SquadQueue(commands.Cog):
                 is_room_thread = True
                 break
         if not is_room_thread:
+            await ctx.response.send_message(f"More than {self.MOGI_LIFETIME} minutes have passed since mogi start, the Mogi Object has been deleted.", ephemeral=True)
             return
         msg = "`#RESULTS\n"
         for i, team in enumerate(room.teams):
@@ -629,8 +633,8 @@ class SquadQueue(commands.Cog):
                                 # print(self.ongoing_events, flush=True)
                                 # print(self.old_events, flush=True)
                                 # print(datetime.now(timezone.utc), flush=True)
-                                asyncio.create_task(
-                                    self.endMogi(mogi.mogi_channel))
+                                # asyncio.create_task(
+                                #     self.endMogi(mogi.mogi_channel))
                         to_remove.append(i)
                         self.ongoing_events[mogi.mogi_channel] = mogi
                         mogi.started = True
@@ -691,6 +695,17 @@ class SquadQueue(commands.Cog):
             self.scheduled_events[self.GUILD].append(mogi)
 
             print(f"Started Que for {next_hour}", flush=True)
+
+    @tasks.loop(minutes=1)
+    async def delete_old_mogis(self):
+        """Deletes old mogi objects"""
+        curr_time = datetime.now(timezone.utc)
+        mogi_lifetime = timedelta(minutes=self.MOGI_LIFETIME)
+        for mogi in self.old_events.values():
+            if curr_time - mogi_lifetime > mogi.start_time:
+                print(
+                    f"Deleting {mogi.start_time} Mogi at {curr_time}", flush=True)
+                del self.old_events[mogi.mogi_channel]
 
     def getTime(self, schedule_time: str, timezone: str):
         """Returns a DateTime object representing the UTC equivalent of the given time."""
