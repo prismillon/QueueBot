@@ -143,7 +143,7 @@ class SquadQueue(commands.Cog):
             member = interaction.user
             mogi = self.get_mogi(interaction)
             if mogi is None or not mogi.started or not mogi.gathering:
-                await interaction.followup.send("Mogi has not started yet.")
+                await interaction.followup.send("Queue has not started yet.")
                 return
 
             player_team = mogi.check_player(member)
@@ -185,7 +185,7 @@ class SquadQueue(commands.Cog):
         async with self.LOCK:
             mogi = self.get_mogi(interaction)
             if mogi is None or not mogi.started or not mogi.gathering:
-                await interaction.followup.send("Mogi has not started yet.")
+                await interaction.followup.send("Queue has not started yet.")
                 return
 
             member = interaction.user
@@ -238,13 +238,13 @@ class SquadQueue(commands.Cog):
         """Display the list of confirmed players for a mogi"""
         mogi = self.get_mogi(interaction)
         if mogi is None:
-            await interaction.response.send_message("Mogi has not started yet.")
+            await interaction.response.send_message("Queue has not started yet.")
             return
         if not await self.is_started(interaction, mogi):
             return
         mogi_list = mogi.confirmed_list()
         if len(mogi_list) == 0:
-            await interaction.response.send_message(f"There are no players in the mogi - type `/c` to join")
+            await interaction.response.send_message(f"There are no players in the queue - type `/c` to join")
             return
         await interaction.response.defer()
         sorted_mogi_list = sorted(mogi_list, reverse=True)
