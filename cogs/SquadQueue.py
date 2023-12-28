@@ -232,7 +232,7 @@ class SquadQueue(commands.Cog):
         await interaction.response.send_message("Sent out request for sub.")
 
     @app_commands.command(name="l")
-    @app_commands.checks.cooldown(1, 120)
+    @app_commands.checks.cooldown(1, 120, key=lambda i: (i.channel.id))
     @app_commands.guild_only()
     async def list(self, interaction: discord.Interaction):
         """Display the list of confirmed players for a mogi"""
