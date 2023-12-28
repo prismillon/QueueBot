@@ -1,14 +1,12 @@
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-from discord.app_commands import Choice
 from dateutil.parser import parse
 from datetime import datetime, timezone, timedelta
 import time
 import json
 from mmr import mk8dx_150cc_mmr, get_mmr_from_discord_id, mk8dx_150cc_fc
 from mogi_objects import Mogi, Team, Player, Room, VoteView, JoinView
-from io import StringIO
 import asyncio
 
 # Scheduled_Event = collections.namedtuple('Scheduled_Event', 'size time started mogi_channel')
@@ -138,32 +136,29 @@ class SquadQueue(commands.Cog):
 
     @app_commands.command(name="c")
     @app_commands.guild_only()
-    async def can(self, ctx: discord.Interaction):
+    async def can(self, interaction: discord.Interaction):
         """Join a mogi"""
-        await ctx.response.defer()
+        await interaction.response.defer()
         async with self.LOCK:
-            member = ctx.user
-            mogi = self.get_mogi(ctx)
-            if mogi is None:
-                await ctx.followup.send("Mogi has not started yet.")
-                return
-            if (not mogi.started or not mogi.gathering):
-                await ctx.followup.send("Mogi is not ready yet.")
+            member = interaction.user
+            mogi = self.get_mogi(interaction)
+            if mogi is None or not mogi.started or not mogi.gathering:
+                await interaction.followup.send("Queue has not started yet.")
                 return
 
             player_team = mogi.check_player(member)
 
             if player_team is not None:
-                await ctx.followup.send(f"{ctx.user.mention} is already signed up.")
+                await interaction.followup.send(f"{interaction.user.mention} is already signed up.")
                 return
 
             players = await mk8dx_150cc_mmr(self.URL, [member])
 
             if players[0] is None:
-                msg = f"{ctx.user.mention} MMR for the following player could not be found: "
-                msg += ", ".join(ctx.user.name)
+                msg = f"{interaction.user.mention} MMR for the following player could not be found: "
+                msg += ", ".join(interaction.user.name)
                 msg += ". Please contact a staff member for help"
-                await ctx.followup.send(msg)
+                await interaction.followup.send(msg)
                 return
 
             msg = ""
@@ -176,56 +171,54 @@ class SquadQueue(commands.Cog):
             squad = Team(players)
             mogi.teams.append(squad)
 
-            msg += f"{players[0].lounge_name} has joined the mogi at {discord.utils.format_dt(mogi.start_time)}, `[{mogi.count_registered()} players]`"
+            msg += f"{players[0].lounge_name} joined queue for mogi {discord.utils.format_dt(mogi.start_time, style='R')}, `[{mogi.count_registered()} players]`"
 
-            await ctx.followup.send(msg)
+            await interaction.followup.send(msg)
             await self.check_room_channels(mogi)
             await self.check_num_teams(mogi)
 
     @app_commands.command(name="d")
     @app_commands.guild_only()
-    async def drop(self, ctx: discord.Interaction):
+    async def drop(self, interaction: discord.Interaction):
         """Remove user from mogi"""
-        await ctx.response.defer()
+        await interaction.response.defer()
         async with self.LOCK:
-            mogi = self.get_mogi(ctx)
-            if mogi is None:
-                await ctx.followup.send("Mogi has not started yet.")
+            mogi = self.get_mogi(interaction)
+            if mogi is None or not mogi.started or not mogi.gathering:
+                await interaction.followup.send("Queue has not started yet.")
                 return
-            if (not mogi.started or not mogi.gathering):
-                await ctx.followup.send("Mogi is not ready yet.")
-                return
-            member = ctx.user
+
+            member = interaction.user
             squad = mogi.check_player(member)
             if squad is None:
-                await ctx.followup.send(f"{member.display_name} is not currently in this event; type `/c` to join")
+                await interaction.followup.send(f"{member.display_name} is not currently in this event; type `/c` to join")
                 return
             mogi.teams.remove(squad)
             msg = "Removed "
             msg += ", ".join([p.lounge_name for p in squad.players])
-            msg += f" from the mogi at {discord.utils.format_dt(mogi.start_time)}"
+            msg += f" from the mogi {discord.utils.format_dt(mogi.start_time, style='R')}"
             msg += f", `[{mogi.count_registered()} players]`"
 
-            await ctx.followup.send(msg)
+            await interaction.followup.send(msg)
 
     @app_commands.command(name="sub")
     @app_commands.guild_only()
-    async def sub(self, ctx):
+    async def sub(self, interaction: discord.Interaction):
         """Sends out a request for a sub in the sub channel. Only works in thread channels for SQ rooms."""
         is_room_thread = False
         room = None
         for mogi in self.ongoing_events.values():
-            if mogi.is_room_thread(ctx.channel_id):
-                room = mogi.get_room_from_thread(ctx.channel_id)
+            if mogi.is_room_thread(interaction.channel_id):
+                room = mogi.get_room_from_thread(interaction.channel_id)
                 is_room_thread = True
                 break
         for mogi in self.old_events.values():
-            if mogi.is_room_thread(ctx.channel.id):
-                room = mogi.get_room_from_thread(ctx.channel.id)
+            if mogi.is_room_thread(interaction.channel.id):
+                room = mogi.get_room_from_thread(interaction.channel.id)
                 is_room_thread = True
                 break
         if not is_room_thread:
-            await ctx.response.send_message(f"More than {self.MOGI_LIFETIME} minutes have passed since mogi start, the Mogi Object has been deleted.", ephemeral=True)
+            await interaction.response.send_message(f"More than {self.MOGI_LIFETIME} minutes have passed since mogi start, the Mogi Object has been deleted.", ephemeral=True)
             return
         msg = ""
         if room.room_num == 1:
@@ -236,23 +229,24 @@ class SquadQueue(commands.Cog):
         await self.SUB_CHANNEL.send(msg)
         view = JoinView(room, get_mmr_from_discord_id)
         await self.SUB_CHANNEL.send(view=view)
-        await ctx.response.send_message("Sent out request for sub.")
+        await interaction.response.send_message("Sent out request for sub.")
 
     @app_commands.command(name="l")
     @app_commands.checks.cooldown(1, 120)
     @app_commands.guild_only()
-    async def list(self, ctx):
+    async def list(self, interaction: discord.Interaction):
         """Display the list of confirmed players for a mogi"""
-        mogi = self.get_mogi(ctx)
+        mogi = self.get_mogi(interaction)
         if mogi is None:
-            await ctx.response.send_message("Mogi has not started yet.")
+            await interaction.response.send_message("Queue has not started yet.")
             return
-        if not await self.is_started(ctx, mogi):
+        if not await self.is_started(interaction, mogi):
             return
         mogi_list = mogi.confirmed_list()
         if len(mogi_list) == 0:
-            await ctx.response.send_message(f"There are no players in the mogi - type `/c` to join")
+            await interaction.response.send_message(f"There are no players in the queue - type `/c` to join")
             return
+        await interaction.response.defer()
         sorted_mogi_list = sorted(mogi_list, reverse=True)
         msg = f"Current Mogi List\n"
         for i in range(len(sorted_mogi_list)):
@@ -264,8 +258,15 @@ class SquadQueue(commands.Cog):
             teams_per_room = int(12/mogi.size)
             num_rooms = int(len(sorted_mogi_list) / (12/mogi.size))+1
             msg += f"[{num_next}/{teams_per_room}] players for {num_rooms} room(s)"
-        f = discord.File(StringIO(msg), filename="MogiData.txt")
-        await ctx.response.send_message(file=f)
+        message = msg.split("\n")
+        bulk_msg = ""
+        for i in range(len(message)):
+            if len(bulk_msg + message[i] + "\n") > 2000:
+                await interaction.followup.send(bulk_msg)
+                bulk_msg = ""
+            bulk_msg += message[i] + "\n"
+        if len(bulk_msg) > 0:
+            await interaction.followup.send(bulk_msg)
 
     @list.error  # Tell the user when they've got a cooldown
     async def on_list_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -273,6 +274,7 @@ class SquadQueue(commands.Cog):
             await interaction.response.send_message("Wait before using `/l` command", ephemeral=True)
 
     @app_commands.command(name="scoreboard")
+    @app_commands.guild_only()
     async def scoreboard(self, ctx):
         """Displays the scoreboard of the room. Only works in thread channels for SQ rooms."""
         is_room_thread = False
@@ -640,7 +642,7 @@ class SquadQueue(commands.Cog):
                         mogi.started = True
                         mogi.gathering = True
                         await self.unlockdown(mogi.mogi_channel)
-                        await mogi.mogi_channel.send(f"A que is gathering for the mogi at {discord.utils.format_dt(mogi.start_time)} - @here Type `/c`, `/d`, or `/l`")
+                        await mogi.mogi_channel.send(f"A queue is gathering for the mogi {discord.utils.format_dt(mogi.start_time, style='R')} - @here Type `/c`, `/d`, or `/l`")
             for ind in reversed(to_remove):
                 del guild[ind]
 
@@ -671,7 +673,8 @@ class SquadQueue(commands.Cog):
             print(e)
 
     async def schedule_que_event(self):
-        """Schedules que for the next hour in the given channel."""
+        """Schedules queue for the next hour in the given channel."""
+
         if self.GUILD is not None:
             if datetime.now().minute >= self.bot.config["JOINING_TIME"]:
                 # print("Hourly Que is too late, starting Que at next hour", flush=True)
@@ -694,7 +697,7 @@ class SquadQueue(commands.Cog):
 
             self.scheduled_events[self.GUILD].append(mogi)
 
-            print(f"Started Que for {next_hour}", flush=True)
+            print(f"Started Queue for {next_hour}", flush=True)
 
     @tasks.loop(minutes=1)
     async def delete_old_mogis(self):
