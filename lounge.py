@@ -1,16 +1,13 @@
 import discord
 from discord.ext import commands
 import json
-import logging
 import asyncio
-
-logging.basicConfig(level=logging.INFO)
 
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 bot = commands.Bot(command_prefix=['!', '^'],
-                   case_insensitive=True, intents=intents)
+                   case_insensitive=True, intents=intents, help_command=None)
 
 initial_extensions = ['cogs.SquadQueue']
 
@@ -52,13 +49,18 @@ async def on_command_error(ctx, error):
         return
     raise error
 
-# bot.run(config["token"])
 
+@bot.event
+async def setup_hook():
+    for extension in initial_extensions:
+        await bot.load_extension(extension)
 
-async def main():
-    async with bot:
-        for extension in initial_extensions:
-            await bot.load_extension(extension)
-        await bot.start(bot.config["token"])
+bot.run(bot.config["token"])
 
-asyncio.run(main())
+# async def main():
+#     async with bot:
+#         for extension in initial_extensions:
+#             await bot.load_extension(extension)
+#         await bot.start(bot.config["token"])
+
+# asyncio.run(main())

@@ -146,6 +146,7 @@ class Player:
         self.lounge_name = lounge_name
         self.mmr = mmr
         self.confirmed = False
+        self.score = 0
 
 
 class VoteView(View):

@@ -6,7 +6,7 @@ from datetime import datetime, timezone, timedelta
 import time
 import json
 from mmr import mk8dx_150cc_mmr, get_mmr_from_discord_id, mk8dx_150cc_fc
-from mogi_objects import Mogi, Team, Player, Room, VoteView, JoinView
+from mogi_objects import Mogi, Team, Player, Room, VoteView, JoinView, get_tier
 import asyncio
 
 # Scheduled_Event = collections.namedtuple('Scheduled_Event', 'size time started mogi_channel')
@@ -246,9 +246,9 @@ class SquadQueue(commands.Cog):
         if len(mogi_list) == 0:
             await interaction.response.send_message(f"There are no players in the queue - type `/c` to join")
             return
-        await interaction.response.defer()
+
         sorted_mogi_list = sorted(mogi_list, reverse=True)
-        msg = f"Current Mogi List\n"
+        msg = "Current Mogi List:\n"
         for i in range(len(sorted_mogi_list)):
             msg += f"{i+1}) "
             msg += ", ".join([p.lounge_name for p in sorted_mogi_list[i].players])
@@ -262,45 +262,57 @@ class SquadQueue(commands.Cog):
         bulk_msg = ""
         for i in range(len(message)):
             if len(bulk_msg + message[i] + "\n") > 2000:
-                await interaction.followup.send(bulk_msg)
+                await interaction.channel.send(bulk_msg) if interaction.response.is_done() else await interaction.response.send_message(bulk_msg)
                 bulk_msg = ""
             bulk_msg += message[i] + "\n"
         if len(bulk_msg) > 0:
-            await interaction.followup.send(bulk_msg)
+            await interaction.channel.send(bulk_msg) if interaction.response.is_done() else await interaction.response.send_message(bulk_msg)
 
     @list.error  # Tell the user when they've got a cooldown
     async def on_list_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message("Wait before using `/l` command", ephemeral=True)
 
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.author.bot or not (message.content.isdecimal() and 12 <= int(message.content) <= 180):
+            return
+        mogi = discord.utils.find(lambda mogi: mogi.is_room_thread(message.channel.id), self.ongoing_events.values())
+        if not mogi:
+            return
+        room = discord.utils.find(lambda room: room.thread.id == message.channel.id, mogi.rooms)
+        if not room or not room.teams:
+            return
+        team = discord.utils.find(lambda team: team.has_player(message.author), room.teams)
+        if not team:
+            return
+        player = discord.utils.find(lambda player: player.member.id == message.author.id, team.players)
+        if player:
+            player.score = int(message.content)
+
     @app_commands.command(name="scoreboard")
     @app_commands.guild_only()
-    async def scoreboard(self, ctx):
+    async def scoreboard(self, interaction: discord.Interaction):
         """Displays the scoreboard of the room. Only works in thread channels for SQ rooms."""
-        is_room_thread = False
-        room = None
-        for mogi in self.ongoing_events.values():
-            if mogi.is_room_thread(ctx.channel.id):
-                room = mogi.get_room_from_thread(ctx.channel.id)
-                is_room_thread = True
-                break
-        for mogi in self.old_events.values():
-            if mogi.is_room_thread(ctx.channel.id):
-                room = mogi.get_room_from_thread(ctx.channel.id)
-                is_room_thread = True
-                break
-        if not is_room_thread:
-            await ctx.response.send_message(f"More than {self.MOGI_LIFETIME} minutes have passed since mogi start, the Mogi Object has been deleted.", ephemeral=True)
+
+        mogi = discord.utils.find(lambda mogi: mogi.is_room_thread(interaction.channel_id), self.ongoing_events.values())
+        if not mogi:
+            await interaction.response.send_message(f"More than {self.MOGI_LIFETIME} minutes have passed since mogi start, the Mogi Object has been deleted.", ephemeral=True)
             return
-        msg = "`#RESULTS\n"
-        for i, team in enumerate(room.teams):
-            # TODO: change this line for ffa
-            msg += f"Team {i+1} - {chr(ord('A')+i)}\n"
+
+        room = discord.utils.find(lambda room: room.thread.id == interaction.channel_id, mogi.rooms)
+
+        if not room:
+            await interaction.response.send_message(f"More than {self.MOGI_LIFETIME} minutes have passed since mogi start, the Mogi Object has been deleted.", ephemeral=True)
+            return
+        
+        room_mmr = round((room.mmr_high + room.mmr_low) / 2 - 500)
+        msg = f"!submit {round(12/len(room.teams))} {get_tier(room_mmr)}\n"
+        for team in room.teams:
             for player in team.players:
-                msg += f"{player.lounge_name} [] 0\n"
-            msg += "\n"
-        msg += f"`Fill out the scores for each player and then use the `!submit` command to submit the table."
-        await ctx.response.send_message(msg)
+                msg += f"{player.lounge_name} {player.score}\n"
+        await interaction.response.send_message(msg)
 
     async def start_input_validation(self, ctx, size: int, sq_id: int):
         valid_sizes = [1, 2, 3, 4, 6]
