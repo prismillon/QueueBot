@@ -30,6 +30,8 @@ class SquadQueue(commands.Cog):
 
         self.msg_queue = {}
 
+        self.QUEUE_TIME_BLOCKER = datetime.now(timezone.utc)
+
         self.GUILD = None
 
         self.MOGI_CHANNEL = None
@@ -273,21 +275,24 @@ class SquadQueue(commands.Cog):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message("Wait before using `/l` command", ephemeral=True)
 
-
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author.bot or not (message.content.isdecimal() and 12 <= int(message.content) <= 180):
             return
-        mogi = discord.utils.find(lambda mogi: mogi.is_room_thread(message.channel.id), self.ongoing_events.values())
+        mogi = discord.utils.find(lambda mogi: mogi.is_room_thread(
+            message.channel.id), self.ongoing_events.values())
         if not mogi:
             return
-        room = discord.utils.find(lambda room: room.thread.id == message.channel.id, mogi.rooms)
+        room = discord.utils.find(
+            lambda room: room.thread.id == message.channel.id, mogi.rooms)
         if not room or not room.teams:
             return
-        team = discord.utils.find(lambda team: team.has_player(message.author), room.teams)
+        team = discord.utils.find(
+            lambda team: team.has_player(message.author), room.teams)
         if not team:
             return
-        player = discord.utils.find(lambda player: player.member.id == message.author.id, team.players)
+        player = discord.utils.find(
+            lambda player: player.member.id == message.author.id, team.players)
         if player:
             player.score = int(message.content)
 
@@ -296,23 +301,88 @@ class SquadQueue(commands.Cog):
     async def scoreboard(self, interaction: discord.Interaction):
         """Displays the scoreboard of the room. Only works in thread channels for SQ rooms."""
 
-        mogi = discord.utils.find(lambda mogi: mogi.is_room_thread(interaction.channel_id), self.ongoing_events.values())
+        mogi = discord.utils.find(lambda mogi: mogi.is_room_thread(
+            interaction.channel_id), self.ongoing_events.values())
         if not mogi:
             await interaction.response.send_message(f"More than {self.MOGI_LIFETIME} minutes have passed since mogi start, the Mogi Object has been deleted.", ephemeral=True)
             return
 
-        room = discord.utils.find(lambda room: room.thread.id == interaction.channel_id, mogi.rooms)
+        room = discord.utils.find(
+            lambda room: room.thread.id == interaction.channel_id, mogi.rooms)
 
         if not room:
             await interaction.response.send_message(f"More than {self.MOGI_LIFETIME} minutes have passed since mogi start, the Mogi Object has been deleted.", ephemeral=True)
             return
-        
+
         room_mmr = round((room.mmr_high + room.mmr_low) / 2 - 500)
         msg = f"!submit {round(12/len(room.teams))} {get_tier(room_mmr)}\n"
         for team in room.teams:
             for player in team.players:
                 msg += f"{player.lounge_name} {player.score}\n"
         await interaction.response.send_message(msg)
+
+    @app_commands.command(name="remove_player")
+    @app_commands.guild_only()
+    async def remove_player(self, interaction: discord.Interaction, member: discord.Member):
+        """Removes a specific player from the current queue.  Staff use only."""
+        await interaction.response.defer()
+        async with self.LOCK:
+            mogi = self.get_mogi(interaction)
+            if mogi is None or not mogi.started or not mogi.gathering:
+                await interaction.followup.send("Queue has not started yet.")
+                return
+
+            squad = mogi.check_player(member)
+            if squad is None:
+                await interaction.followup.send(f"{member.display_name} is not currently in this event; type `/c` to join")
+                return
+            mogi.teams.remove(squad)
+            msg = "Staff has removed "
+            msg += ", ".join([p.lounge_name for p in squad.players])
+            msg += f" from the mogi {discord.utils.format_dt(mogi.start_time, style='R')}"
+            msg += f", `[{mogi.count_registered()} players]`"
+
+            await interaction.followup.send(msg)
+
+    @app_commands.command(name="annul_current_mogi")
+    @app_commands.guild_only()
+    async def annul_current_mogi(self, interaction: discord.Interaction):
+        """The mogi currently gathering will be deleted.  The queue resumes at the next hour.  Staff use only."""
+        self.scheduled_events = {}
+        self.ongoing_events = {}
+        curr_time = datetime.now(timezone.utc)
+        truncated_time = curr_time.replace(
+            minute=0, second=0, microsecond=0)
+        self.QUEUE_TIME_BLOCKER = truncated_time + timedelta(hours=1)
+        await self.lockdown(self.MOGI_CHANNEL)
+        await interaction.response.send_message("The current Mogi has been canceled, the queue will resume at the next hour.")
+
+    @app_commands.command(name="pause_mogi_scheduling")
+    @app_commands.guild_only()
+    async def pause_mogi_scheduling(self, interaction: discord.Interaction):
+        """The mogi that is currently gathering will continue to work.  Future mogis cannot be scheduled.  Staff use only."""
+        curr_time = datetime.now(timezone.utc)
+        self.QUEUE_TIME_BLOCKER = curr_time + timedelta(weeks=52)
+        await interaction.response.send_message("Future Mogis will not be started.")
+
+    @app_commands.command(name="resume_mogi_scheduling")
+    @app_commands.guild_only()
+    async def resume_mogi_scheduling(self, interaction: discord.Interaction):
+        """Mogis will begin to be scheduled again.  Staff use only."""
+        curr_time = datetime.now(timezone.utc)
+        self.QUEUE_TIME_BLOCKER = curr_time
+        await interaction.response.send_message("Mogis will resume scheduling.")
+
+    @app_commands.command(name="reset_bot")
+    @app_commands.guild_only()
+    async def reset_bot(self, interaction: discord.Interaction):
+        """Resets the bot.  Staff use only."""
+        self.scheduled_events = {}
+        self.ongoing_events = {}
+        self.old_events = {}
+        curr_time = datetime.now(timezone.utc)
+        self.QUEUE_TIME_BLOCKER = curr_time
+        await interaction.response.send_message("All events have been deleted.  Queue will restart shortly.")
 
     async def start_input_validation(self, ctx, size: int, sq_id: int):
         valid_sizes = [1, 2, 3, 4, 6]
@@ -688,10 +758,14 @@ class SquadQueue(commands.Cog):
         """Schedules queue for the next hour in the given channel."""
 
         if self.GUILD is not None:
+            curr_time = datetime.now(timezone.utc)
+            if curr_time < self.QUEUE_TIME_BLOCKER:
+                # print(f"Mogi had been blocked from starting before the time limit {self.QUEUE_TIME_BLOCKER}", flush=True)
+                return
             if datetime.now().minute >= self.bot.config["JOINING_TIME"]:
                 # print("Hourly Que is too late, starting Que at next hour", flush=True)
                 return
-            truncated_time = datetime.now(timezone.utc).replace(
+            truncated_time = curr_time.replace(
                 minute=0, second=0, microsecond=0)
             next_hour = truncated_time + timedelta(hours=1)
             for mogi in self.ongoing_events.values():
