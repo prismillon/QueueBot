@@ -226,9 +226,9 @@ class SquadQueue(commands.Cog):
         else:
             low = 0 if room.mmr_low < 500 else room.mmr_low - 500
             msg += f"Room {room.room_num} is looking for a sub with range {low}-{room.mmr_high + 500}\n"
-        await self.SUB_CHANNEL.send(msg)
+        await self.SUB_CHANNEL.send(msg, delete_after=1200)
         view = JoinView(room, get_mmr_from_discord_id)
-        await self.SUB_CHANNEL.send(view=view)
+        await self.SUB_CHANNEL.send(view=view, delete_after=1200)
         await interaction.response.send_message("Sent out request for sub.")
 
     @app_commands.command(name="l")
