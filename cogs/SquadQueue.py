@@ -23,6 +23,8 @@ class SquadQueue(commands.Cog):
 
         self.old_events = {}
 
+        self.sq_times = []
+
         self._que_scheduler = self.que_scheduler.start()
         self._scheduler_task = self.sqscheduler.start()
         self._msgqueue_task = self.send_queued_messages.start()
@@ -391,6 +393,58 @@ class SquadQueue(commands.Cog):
         curr_time = datetime.now(timezone.utc)
         self.QUEUE_TIME_BLOCKER = curr_time
         await interaction.response.send_message("All events have been deleted.  Queue will restart shortly.")
+
+    @commands.command(name="schedule_sq_times")
+    @commands.guild_only()
+    async def schedule_sq_times(self, ctx, timestamps: commands.Greedy[int]):
+        """Saves a list of sq times to skip over.  Input a list of unix utc timestamps.  Staff use only."""
+        if not await self.has_roles(ctx.author, ctx.guild.id, ctx.bot.config):
+            return
+
+        msg = "List of new Dates:\n"
+        curr_time = datetime.now(timezone.utc)
+        new_sq_dates = []
+
+        for timestamp in timestamps:
+            date = datetime.fromtimestamp(timestamp, timezone.utc)
+            truncated_date = date.replace(
+                minute=0, second=0, microsecond=0)
+
+            if curr_time > truncated_date:
+                msg = ""
+                msg += f"Timestamp {timestamp} represents {truncated_date} and is in the past, submit a future date.\n"
+                msg += "No timestamps from this usage of the command have been added."
+                await self.queue_or_send(ctx, msg)
+                return
+
+            new_sq_dates.append(truncated_date)
+            msg += f"{truncated_date}\n"
+
+        self.sq_times += new_sq_dates
+        self.sq_times = list(set(self.sq_times))
+
+        list.sort(self.sq_times)
+
+        await self.queue_or_send(ctx, msg)
+
+    @app_commands.command(name="peek_sq_times")
+    @app_commands.guild_only()
+    async def peek_sq_times(self, interaction: discord.Interaction):
+        """Peeks the current list of sq times.  Staff use only."""
+        msg = "List of Squad Queue Times:\n"
+
+        for index, date in enumerate(self.sq_times):
+            msg += f"{index + 1}) {date}\n"
+
+        await interaction.response.send_message(msg)
+
+    @app_commands.command(name="clear_sq_times")
+    @app_commands.guild_only()
+    async def clear_sq_times(self, interaction: discord.Interaction):
+        """Clears current list of sq times.  Staff use only."""
+        self.sq_times = []
+
+        await interaction.response.send_message("Cleared list of Squad Queue Times.")
 
     async def start_input_validation(self, ctx, size: int, sq_id: int):
         valid_sizes = [1, 2, 3, 4, 6]
@@ -767,15 +821,19 @@ class SquadQueue(commands.Cog):
 
         if self.GUILD is not None:
             curr_time = datetime.now(timezone.utc)
+            truncated_time = curr_time.replace(
+                minute=0, second=0, microsecond=0)
+            next_hour = truncated_time + timedelta(hours=1)
+            if len(self.sq_times) > 0 and truncated_time == self.sq_times[0]:
+                self.sq_times.pop(0)
+                self.QUEUE_TIME_BLOCKER = next_hour
+                await self.MOGI_CHANNEL.send("Squad Queue is currently going on at this hour!  The queue will remain closed.")
             if curr_time < self.QUEUE_TIME_BLOCKER:
                 # print(f"Mogi had been blocked from starting before the time limit {self.QUEUE_TIME_BLOCKER}", flush=True)
                 return
             if datetime.now().minute >= self.bot.config["JOINING_TIME"]:
                 # print("Hourly Que is too late, starting Que at next hour", flush=True)
                 return
-            truncated_time = curr_time.replace(
-                minute=0, second=0, microsecond=0)
-            next_hour = truncated_time + timedelta(hours=1)
             for mogi in self.ongoing_events.values():
                 if mogi.start_time == next_hour:
                     return
