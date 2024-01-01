@@ -44,6 +44,8 @@ class SquadQueue(commands.Cog):
 
         self.MOGI_LIFETIME = bot.config["MOGI_LIFETIME"]
 
+        self.SUB_MESSAGE_LIFETIME_SECONDS = bot.config["SUB_MESSAGE_LIFETIME_SECONDS"]
+
         # number of minutes before scheduled time that queue should open
         self.QUEUE_OPEN_TIME = timedelta(minutes=bot.config["QUEUE_OPEN_TIME"])
 
@@ -228,9 +230,12 @@ class SquadQueue(commands.Cog):
         else:
             low = 0 if room.mmr_low < 500 else room.mmr_low - 500
             msg += f"Room {room.room_num} is looking for a sub with range {low}-{room.mmr_high + 500}\n"
-        await self.SUB_CHANNEL.send(msg, delete_after=1200)
+        message_delete_date = datetime.now(
+            timezone.utc) + timedelta(seconds=self.SUB_MESSAGE_LIFETIME_SECONDS)
+        msg += f"Message will auto-delete in {discord.utils.format_dt(message_delete_date, style='R')}"
+        await self.SUB_CHANNEL.send(msg, delete_after=self.SUB_MESSAGE_LIFETIME_SECONDS)
         view = JoinView(room, get_mmr_from_discord_id)
-        await self.SUB_CHANNEL.send(view=view, delete_after=1200)
+        await self.SUB_CHANNEL.send(view=view, delete_after=self.SUB_MESSAGE_LIFETIME_SECONDS)
         await interaction.response.send_message("Sent out request for sub.")
 
     @app_commands.command(name="l")
