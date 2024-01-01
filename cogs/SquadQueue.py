@@ -309,8 +309,11 @@ class SquadQueue(commands.Cog):
         mogi = discord.utils.find(lambda mogi: mogi.is_room_thread(
             interaction.channel_id), self.ongoing_events.values())
         if not mogi:
-            await interaction.response.send_message(f"More than {self.MOGI_LIFETIME} minutes have passed since mogi start, the Mogi Object has been deleted.", ephemeral=True)
-            return
+            mogi = discord.utils.find(lambda mogi: mogi.is_room_thread(
+                interaction.channel_id), self.old_events.values())
+            if not mogi:
+                await interaction.response.send_message(f"More than {self.MOGI_LIFETIME} minutes have passed since mogi start, the Mogi Object has been deleted.", ephemeral=True)
+                return
 
         room = discord.utils.find(
             lambda room: room.thread.id == interaction.channel_id, mogi.rooms)
