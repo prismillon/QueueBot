@@ -495,7 +495,7 @@ class SquadQueue(commands.Cog):
         if num_created_rooms >= num_rooms:
             return
         for i in range(num_created_rooms, num_rooms):
-            room_name = f"Mogi Room {i+1}"
+            room_name = f"{mogi.start_time.month}/{mogi.start_time.day}, {mogi.start_time.hour}:00:00 - Room {i+1}"
             try:
                 room_channel = await mogi.mogi_channel.create_thread(name=room_name,
                                                                      auto_archive_duration=60,
