@@ -686,7 +686,7 @@ class SquadQueue(commands.Cog):
             truncated_time = curr_time.replace(
                 minute=0, second=0, microsecond=0)
             next_hour = truncated_time + timedelta(hours=1)
-            if len(self.sq_times) > 0 and truncated_time == self.sq_times[0]:
+            if len(self.sq_times) > 0 and next_hour == self.sq_times[0]:
                 self.sq_times.pop(0)
                 self.QUEUE_TIME_BLOCKER = next_hour
                 await self.MOGI_CHANNEL.send("Squad Queue is currently going on at this hour!  The queue will remain closed.")
