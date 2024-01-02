@@ -66,6 +66,7 @@ class Room:
         self.teams = teams
         self.room_num = room_num
         self.thread = thread
+        self.mmr_average = 0
         self.mmr_high = None
         self.mmr_low = None
         self.view = None
@@ -167,6 +168,8 @@ class VoteView(View):
     async def make_teams(self, format):
         random.shuffle(self.players)
 
+        room = self.mogi.get_room_from_thread(self.thread.id)
+
         msg = "**Poll Ended!** \n\n"
         msg += f"1) FFA - {len(self['FFA'])}\n"
         msg += f"2) 2v2 - {len(self['2v2'])}\n"
@@ -175,6 +178,7 @@ class VoteView(View):
         msg += f"Winner: {format[1]}\n\n"
 
         room_mmr = round(sum([p.mmr for p in self.players]) / 12)
+        room.mmr_average = room_mmr
         msg += f"**Room MMR: {room_mmr} - Tier {get_tier(room_mmr - 500)}**\n"
 
         teams = []
@@ -192,7 +196,7 @@ class VoteView(View):
 
         msg += f"\nTable: `/scoreboard`"
 
-        self.mogi.get_room_from_thread(self.thread.id).teams = teams
+        room.teams = teams
 
         self.found_winner = True
         await self.thread.send(msg)

@@ -324,11 +324,14 @@ class SquadQueue(commands.Cog):
             await interaction.response.send_message(f"More than {self.MOGI_LIFETIME} minutes have passed since mogi start, the Mogi Object has been deleted.", ephemeral=True)
             return
 
-        room_mmr = round((room.mmr_high + room.mmr_low) / 2 - 500)
-        msg = f"!submit {round(12/len(room.teams))} {get_tier(room_mmr)}\n"
+        format = round(12/len(room.teams))
+
+        msg = f"!submit {format} {get_tier(room.mmr_average - 500)}\n"
         for team in room.teams:
             for player in team.players:
                 msg += f"{player.lounge_name} {player.score}\n"
+            if format != 1:
+                msg += "\n"
         await interaction.response.send_message(msg)
 
     @app_commands.command(name="remove_player")
