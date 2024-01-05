@@ -289,7 +289,10 @@ class SquadQueue(commands.Cog):
         mogi = discord.utils.find(lambda mogi: mogi.is_room_thread(
             message.channel.id), self.ongoing_events.values())
         if not mogi:
-            return
+            mogi = discord.utils.find(lambda mogi: mogi.is_room_thread(
+                message.channel.id), self.old_events.values())
+            if not mogi:
+                return
         room = discord.utils.find(
             lambda room: room.thread.id == message.channel.id, mogi.rooms)
         if not room or not room.teams:
