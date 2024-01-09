@@ -156,6 +156,8 @@ class VoteView(View):
         self.players = players
         self.thread = thread
         self.mogi = mogi
+        self.header_text = ""
+        self.teams_text = ""
         self.found_winner = False
         self.__setattr__("FFA", [])
         self.__setattr__("2v2", [])
@@ -179,7 +181,9 @@ class VoteView(View):
 
         room_mmr = round(sum([p.mmr for p in self.players]) / 12)
         room.mmr_average = room_mmr
-        msg += f"**Room MMR: {room_mmr} - Tier {get_tier(room_mmr - 500)}**\n"
+        self.header_text = f"**Room {room.room_num} MMR: {room_mmr} - Tier {get_tier(room_mmr - 500)}** "
+        msg += self.header_text
+        msg += "\n"
 
         teams = []
         teams_per_room = int(12 / format[0])
@@ -190,9 +194,11 @@ class VoteView(View):
         teams.sort(key=lambda team: team.avg_mmr, reverse=True)
 
         for j in range(teams_per_room):
-            msg += f"`{j+1}.` "
-            msg += ", ".join([p.lounge_name for p in teams[j].players])
-            msg += f" ({int(teams[j].avg_mmr)} MMR)\n"
+            team_text = f"`{j+1}.` "
+            team_text += ", ".join([p.lounge_name for p in teams[j].players])
+            team_text += f" ({int(teams[j].avg_mmr)} MMR)\n"
+            msg += team_text
+            self.teams_text += team_text
 
         msg += f"\nTable: `/scoreboard`\n"
 

@@ -40,6 +40,8 @@ class SquadQueue(commands.Cog):
 
         self.SUB_CHANNEL = None
 
+        self.HISTORY_CHANNEL = None
+
         self.LOCK = asyncio.Lock()
 
         self.URL = bot.config["url"]
@@ -67,9 +69,12 @@ class SquadQueue(commands.Cog):
             self.bot.config["queue_join_channel"])
         self.SUB_CHANNEL = self.bot.get_channel(
             self.bot.config["queue_sub_channel"])
+        self.HISTORY_CHANNEL = self.bot.get_channel(
+            self.bot.config["queue_history_channel"])
         print(f"Server - {self.GUILD}", flush=True)
         print(f"Join Channel - {self.MOGI_CHANNEL}", flush=True)
         print(f"Sub Channel - {self.SUB_CHANNEL}", flush=True)
+        print(f"History Channel - {self.HISTORY_CHANNEL}", flush=True)
         print("Ready!", flush=True)
 
     async def lockdown(self, channel: discord.TextChannel):
@@ -492,6 +497,16 @@ class SquadQueue(commands.Cog):
             for room in mogi.rooms:
                 await room.view.find_winner()
 
+    async def write_history(self):
+        """Writes the teams, tier and average of each room per hour."""
+        for mogi in self.ongoing_events.values():
+            await self.HISTORY_CHANNEL.send(f"{discord.utils.format_dt(mogi.start_time)} Rooms")
+            for room in mogi.rooms:
+                msg = room.view.header_text
+                msg += f"{room.thread.jump_url}\n\n"
+                msg += room.view.teams_text
+                await self.HISTORY_CHANNEL.send(msg)
+
     # make thread channels while the event is gathering instead of at the end,
     # since discord only allows 50 thread channels to be created per 5 minutes.
     async def check_room_channels(self, mogi):
@@ -600,6 +615,7 @@ class SquadQueue(commands.Cog):
             await mogi.mogi_channel.send(msg)
         await asyncio.sleep(120)
         await self.end_voting()
+        await self.write_history()
 
     async def check_num_teams(self, mogi):
         if not mogi.gathering or not mogi.is_automated:
