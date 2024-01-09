@@ -194,7 +194,11 @@ class VoteView(View):
             msg += ", ".join([p.lounge_name for p in teams[j].players])
             msg += f" ({int(teams[j].avg_mmr)} MMR)\n"
 
-        msg += f"\nTable: `/scoreboard`"
+        msg += f"\nTable: `/scoreboard`\n"
+
+        msg += f"RandomBot Scoreboard: `/scoreboard {teams_per_room} {', '.join([p.lounge_name for p in self.players])}`\n\n"
+
+        msg += "Decide a host amongst yourselves; room open at :00, penalty at :06. Good luck!"
 
         room.teams = teams
 
