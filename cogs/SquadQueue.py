@@ -615,25 +615,28 @@ class SquadQueue(commands.Cog):
     async def ongoing_mogi_checks(self):
         for mogi in self.ongoing_events.values():
             # If it's not automated, not started, we've already started making the rooms, don't run this
-            if not mogi.is_automated or not mogi.started or mogi.making_rooms_run:
-                return
-            cur_time = datetime.now(timezone.utc)
-            if (mogi.start_time - self.QUEUE_OPEN_TIME + self.JOINING_TIME + self.EXTENSION_TIME) <= cur_time:
-                await self.add_teams_to_rooms(mogi, (mogi.start_time.minute) % 60, True)
-                return
-            if mogi.start_time - self.QUEUE_OPEN_TIME + self.JOINING_TIME <= cur_time:
-                # check if there are an even amount of teams since we are past the queue time
-                numLeftoverTeams = mogi.count_registered() % int((12/mogi.size))
-                if numLeftoverTeams == 0:
-                    await self.add_teams_to_rooms(mogi, (mogi.start_time.minute) % 60, True)
+            async with self.LOCK:
+                if not mogi.is_automated or not mogi.started or mogi.making_rooms_run:
                     return
-                else:
-                    if int(cur_time.second / 20) == 0:
-                        force_time = mogi.start_time - self.QUEUE_OPEN_TIME + \
-                            self.JOINING_TIME + self.EXTENSION_TIME
-                        minutes_left = int((force_time - cur_time).seconds/60)
-                        x_teams = int(int(12/mogi.size) - numLeftoverTeams)
-                        await mogi.mogi_channel.send(f"Need {x_teams} more player(s) to start immediately. Starting in {minutes_left + 1} minute(s) regardless.")
+                cur_time = datetime.now(timezone.utc)
+                if (mogi.start_time - self.QUEUE_OPEN_TIME + self.JOINING_TIME + self.EXTENSION_TIME) <= cur_time:
+                    mogi.gathering = False
+                if mogi.start_time - self.QUEUE_OPEN_TIME + self.JOINING_TIME <= cur_time and mogi.gathering:
+                    # check if there are an even amount of teams since we are past the queue time
+                    numLeftoverTeams = mogi.count_registered() % int((12/mogi.size))
+                    if numLeftoverTeams == 0:
+                        mogi.gathering = False
+                    else:
+                        if int(cur_time.second / 20) == 0:
+                            force_time = mogi.start_time - self.QUEUE_OPEN_TIME + \
+                                self.JOINING_TIME + self.EXTENSION_TIME
+                            minutes_left = int(
+                                (force_time - cur_time).seconds/60)
+                            x_teams = int(int(12/mogi.size) - numLeftoverTeams)
+                            await mogi.mogi_channel.send(f"Need {x_teams} more player(s) to start immediately. Starting in {minutes_left + 1} minute(s) regardless.")
+            if not mogi.gathering:
+                await mogi.mogi_channel.send("Mogi is now closed; players can no longer join or drop from the event")
+                await self.add_teams_to_rooms(mogi, (mogi.start_time.minute) % 60, True)
 
     async def scheduler_mogi_start(self):
         cur_time = datetime.now(timezone.utc)
@@ -650,9 +653,9 @@ class SquadQueue(commands.Cog):
                                 self.old_events[mogi.mogi_channel] = self.ongoing_events[mogi.mogi_channel]
                                 del self.ongoing_events[mogi.mogi_channel]
                         to_remove.append(i)
-                        self.ongoing_events[mogi.mogi_channel] = mogi
                         mogi.started = True
                         mogi.gathering = True
+                        self.ongoing_events[mogi.mogi_channel] = mogi
                         await self.unlockdown(mogi.mogi_channel)
                         await mogi.mogi_channel.send(f"A queue is gathering for the mogi {discord.utils.format_dt(mogi.start_time, style='R')} - @here Type `/c`, `/d`, or `/l`")
             for ind in reversed(to_remove):
