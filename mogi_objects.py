@@ -193,16 +193,20 @@ class VoteView(View):
 
         teams.sort(key=lambda team: team.avg_mmr, reverse=True)
 
+        scoreboard_text = []
+
         for j in range(teams_per_room):
             team_text = f"`{j+1}.` "
-            team_text += ", ".join([p.lounge_name for p in teams[j].players])
+            team_names = ", ".join([p.lounge_name for p in teams[j].players])
+            scoreboard_text.append(team_names)
+            team_text += team_names
             team_text += f" ({int(teams[j].avg_mmr)} MMR)\n"
             msg += team_text
             self.teams_text += team_text
 
         msg += f"\nTable: `/scoreboard`\n"
 
-        msg += f"RandomBot Scoreboard: `/scoreboard {teams_per_room} {', '.join([p.lounge_name for p in self.players])}`\n\n"
+        msg += f"RandomBot Scoreboard: `/scoreboard {teams_per_room} {', '.join(scoreboard_text)}`\n\n"
 
         msg += "Decide a host amongst yourselves; room open at :00, penalty at :06. Good luck!"
 
