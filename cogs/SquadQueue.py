@@ -774,17 +774,14 @@ class SquadQueue(commands.Cog):
                 or not await self.is_gathering(ctx, mogi)):
             return
 
-        # checking players' mmr
         check_players = [ctx.author]
         check_players.extend(members)
         players = await mk8dx_150cc_mmr(self.URL, check_players)
-        not_found = []
-        for i, player in enumerate(players):
-            if player is None:
-                not_found.append(check_players[i].display_name)
-        players[0].confirmed = True
-        squad = Team(players)
         for i in range(0, 12):
+            player = Player(
+                players[0].member, f"{players[0].lounge_name}{i + 1}", players[0].mmr + (10 * i))
+            player.confirmed = True
+            squad = Team([player])
             mogi.teams.append(squad)
         msg = f"{players[0].lounge_name} added 12 times."
         await self.queue_or_send(ctx, msg)
@@ -793,7 +790,7 @@ class SquadQueue(commands.Cog):
 
     @commands.command(name="debug_add_many_players")
     @commands.is_owner()
-    async def debug_add_players(self, ctx, members: commands.Greedy[discord.Member]):
+    async def debug_add_many_players(self, ctx, members: commands.Greedy[discord.Member]):
         mogi = self.get_mogi(ctx)
         if mogi is None:
             return
@@ -801,17 +798,14 @@ class SquadQueue(commands.Cog):
                 or not await self.is_gathering(ctx, mogi)):
             return
 
-        # checking players' mmr
         check_players = [ctx.author]
         check_players.extend(members)
         players = await mk8dx_150cc_mmr(self.URL, check_players)
-        not_found = []
-        for i, player in enumerate(players):
-            if player is None:
-                not_found.append(check_players[i].display_name)
-        players[0].confirmed = True
-        squad = Team(players)
         for i in range(0, 100):
+            player = Player(
+                players[0].member, f"{players[0].lounge_name}{i + 1}", players[0].mmr + (10 * i))
+            player.confirmed = True
+            squad = Team([player])
             mogi.teams.append(squad)
         msg = f"{players[0].lounge_name} added 100 times."
         await self.queue_or_send(ctx, msg)
