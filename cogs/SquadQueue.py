@@ -226,7 +226,7 @@ class SquadQueue(commands.Cog):
         if not is_room_thread:
             await interaction.response.send_message(f"More than {self.MOGI_LIFETIME} minutes have passed since mogi start, the Mogi Object has been deleted.", ephemeral=True)
             return
-        msg = ""
+        msg = "<@&682445864400453739> - "
         if room.room_num == 1:
             msg += f"Room {room.room_num} is looking for a sub with mmr >{room.mmr_low - 500}\n"
         else:
