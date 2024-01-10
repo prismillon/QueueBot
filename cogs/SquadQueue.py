@@ -28,9 +28,12 @@ class SquadQueue(commands.Cog):
         self._que_scheduler = self.que_scheduler.start()
         self._scheduler_task = self.sqscheduler.start()
         self._msgqueue_task = self.send_queued_messages.start()
+        self._list_task = self.list_task.start()
         self._end_mogis_task = self.delete_old_mogis.start()
 
         self.msg_queue = {}
+
+        self.list_messages = []
 
         self.QUEUE_TIME_BLOCKER = datetime.now(timezone.utc)
 
@@ -286,6 +289,59 @@ class SquadQueue(commands.Cog):
     async def on_list_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message("Wait before using `/l` command", ephemeral=True)
+
+    @tasks.loop(minutes=1)
+    async def list_task(self):
+        """Continually display the list of confirmed players for a mogi in the history channel"""
+        if len(self.ongoing_events) > 0:
+            for mogi in self.ongoing_events.values():
+                if not mogi.gathering:
+                    await self.delete_list_messages(0)
+                    return
+
+                mogi_list = mogi.confirmed_list()
+
+                sorted_mogi_list = sorted(mogi_list, reverse=True)
+                msg = "Current Mogi List:\n"
+                for i in range(len(sorted_mogi_list)):
+                    msg += f"{i+1}) "
+                    msg += ", ".join([p.lounge_name for p in sorted_mogi_list[i].players])
+                    msg += f" ({sorted_mogi_list[i].avg_mmr:.1f} MMR)\n"
+                if (len(sorted_mogi_list) % (12/mogi.size) != 0):
+                    num_next = int(len(sorted_mogi_list) % (12/mogi.size))
+                    teams_per_room = int(12/mogi.size)
+                    num_rooms = int(len(sorted_mogi_list) / (12/mogi.size))+1
+                    msg += f"[{num_next}/{teams_per_room}] players for {num_rooms} room(s)"
+                message = msg.split("\n")
+
+                new_messages = []
+                bulk_msg = ""
+                for i in range(len(message)):
+                    if len(bulk_msg + message[i] + "\n") > 2000:
+                        new_messages.append(bulk_msg)
+                        bulk_msg = ""
+                    bulk_msg += message[i] + "\n"
+                if len(bulk_msg) > 0:
+                    new_messages.append(bulk_msg)
+
+                await self.delete_list_messages(len(new_messages))
+
+                for i, message in enumerate(new_messages):
+                    if i < len(self.list_messages):
+                        old_message = self.list_messages[i]
+                        await old_message.edit(content=message)
+                    else:
+                        new_message = await self.HISTORY_CHANNEL.send(message)
+                        self.list_messages.append(new_message)
+        else:
+            await self.delete_list_messages(0)
+
+    async def delete_list_messages(self, new_list_size: int):
+        messages_to_delete = []
+        while len(self.list_messages) > new_list_size:
+            messages_to_delete.append(self.list_messages.pop())
+        if self.HISTORY_CHANNEL and len(messages_to_delete) > 0:
+            await self.HISTORY_CHANNEL.delete_messages(messages_to_delete)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -651,6 +707,7 @@ class SquadQueue(commands.Cog):
                             x_teams = int(int(12/mogi.size) - numLeftoverTeams)
                             await mogi.mogi_channel.send(f"Need {x_teams} more player(s) to start immediately. Starting in {minutes_left + 1} minute(s) regardless.")
             if not mogi.gathering:
+                await self.delete_list_messages(0)
                 await mogi.mogi_channel.send("Mogi is now closed; players can no longer join or drop from the event")
                 await self.add_teams_to_rooms(mogi, (mogi.start_time.minute) % 60, True)
 
