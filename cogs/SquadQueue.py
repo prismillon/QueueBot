@@ -326,11 +326,17 @@ class SquadQueue(commands.Cog):
 
                 await self.delete_list_messages(len(new_messages))
 
-                for i, message in enumerate(new_messages):
-                    if i < len(self.list_messages):
-                        old_message = self.list_messages[i]
-                        await old_message.edit(content=message)
-                    else:
+                try:
+                    for i, message in enumerate(new_messages):
+                        if i < len(self.list_messages):
+                            old_message = self.list_messages[i]
+                            await old_message.edit(content=message)
+                        else:
+                            new_message = await self.HISTORY_CHANNEL.send(message)
+                            self.list_messages.append(new_message)
+                except:
+                    await self.delete_list_messages(0)
+                    for i, message in enumerate(new_messages):
                         new_message = await self.HISTORY_CHANNEL.send(message)
                         self.list_messages.append(new_message)
         else:
