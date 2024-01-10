@@ -565,8 +565,9 @@ class SquadQueue(commands.Cog):
             await self.HISTORY_CHANNEL.send(f"{discord.utils.format_dt(mogi.start_time)} Rooms")
             for room in mogi.rooms:
                 msg = room.view.header_text
-                msg += f"{room.thread.jump_url}\n\n"
+                msg += f"{room.thread.jump_url}\n"
                 msg += room.view.teams_text
+                msg += "ㅤ"
                 await self.HISTORY_CHANNEL.send(msg)
 
     # make thread channels while the event is gathering instead of at the end,
