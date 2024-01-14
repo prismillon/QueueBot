@@ -168,10 +168,10 @@ class SquadQueue(commands.Cog):
 
             players = await mk8dx_150cc_mmr(self.URL, [member])
 
-            if players[0] is None:
+            if len(players) == 0 or players[0] is None:
                 msg = f"{interaction.user.mention} MMR for the following player could not be found: "
                 msg += ", ".join(interaction.user.name)
-                msg += ". Please contact a staff member for help"
+                msg += ". Please contact a staff member for help or try again."
                 await interaction.followup.send(msg)
                 return
 
@@ -343,11 +343,14 @@ class SquadQueue(commands.Cog):
             await self.delete_list_messages(0)
 
     async def delete_list_messages(self, new_list_size: int):
-        messages_to_delete = []
-        while len(self.list_messages) > new_list_size:
-            messages_to_delete.append(self.list_messages.pop())
-        if self.HISTORY_CHANNEL and len(messages_to_delete) > 0:
-            await self.HISTORY_CHANNEL.delete_messages(messages_to_delete)
+        try:
+            messages_to_delete = []
+            while len(self.list_messages) > new_list_size:
+                messages_to_delete.append(self.list_messages.pop())
+            if self.HISTORY_CHANNEL and len(messages_to_delete) > 0:
+                await self.HISTORY_CHANNEL.delete_messages(messages_to_delete)
+        except Exception as e:
+            print(e, flush=True)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -555,20 +558,38 @@ class SquadQueue(commands.Cog):
 
     async def end_voting(self):
         """Ends voting in all rooms with ongoing votes."""
-        for mogi in self.ongoing_events.values():
-            for room in mogi.rooms:
-                await room.view.find_winner()
+        try:
+            index = 0
+            for mogi in self.ongoing_events.values():
+                index += 1
+                for room in mogi.rooms:
+                    if not room or not room.view:
+                        print(
+                            f"Skipping room {index} in function end_voting.", flush=True)
+                        continue
+                    await room.view.find_winner()
+        except Exception as e:
+            print(e, flush=True)
 
     async def write_history(self):
         """Writes the teams, tier and average of each room per hour."""
-        for mogi in self.ongoing_events.values():
-            await self.HISTORY_CHANNEL.send(f"{discord.utils.format_dt(mogi.start_time)} Rooms")
-            for room in mogi.rooms:
-                msg = room.view.header_text
-                msg += f"{room.thread.jump_url}\n"
-                msg += room.view.teams_text
-                msg += "ㅤ"
-                await self.HISTORY_CHANNEL.send(msg)
+        try:
+            index = 0
+            for mogi in self.ongoing_events.values():
+                index += 1
+                await self.HISTORY_CHANNEL.send(f"{discord.utils.format_dt(mogi.start_time)} Rooms")
+                for room in mogi.rooms:
+                    if not room or not room.view:
+                        print(
+                            f"Skipping room {index} in function write_history.", flush=True)
+                        continue
+                    msg = room.view.header_text
+                    msg += f"{room.thread.jump_url}\n"
+                    msg += room.view.teams_text
+                    msg += "ㅤ"
+                    await self.HISTORY_CHANNEL.send(msg)
+        except Exception as e:
+            print(e, flush=True)
 
     # make thread channels while the event is gathering instead of at the end,
     # since discord only allows 50 thread channels to be created per 5 minutes.
@@ -585,7 +606,7 @@ class SquadQueue(commands.Cog):
                                                                      auto_archive_duration=60,
                                                                      invitable=False)
             except Exception as e:
-                print(e)
+                print(e, flush=True)
                 err_msg = f"\nAn error has occurred while creating a room channel:\n{e}"
                 await mogi.mogi_channel.send(err_msg)
                 return
@@ -645,8 +666,6 @@ class SquadQueue(commands.Cog):
                 mentions += " "
             room_msg = msg
             mentions += " ".join([m.mention for m in extra_members if m is not None])
-            # room_msg += ("\nDecide a host amongst yourselves; room open at :%02d, penalty at :%02d, start by :%02d. Good luck!\n\n"
-            #              % (open_time, pen_time, start_time))
             room_msg += "\nVote for format FFA, 2v2, 3v3, or 4v4.\n"
             room_msg += "\nIf you need staff's assistance, use the `!staff` command in this channel.\n"
             room_msg += mentions
@@ -661,7 +680,7 @@ class SquadQueue(commands.Cog):
                 curr_room.mmr_high = player_list[0].mmr
                 await room_channel.send(view=view)
             except Exception as e:
-                print(e)
+                print(e, flush=True)
                 err_msg = f"\nAn error has occurred while creating the room channel; please contact your opponents in DM or another channel\n"
                 err_msg += mentions
                 msg += err_msg
@@ -802,13 +821,16 @@ class SquadQueue(commands.Cog):
     @tasks.loop(minutes=1)
     async def delete_old_mogis(self):
         """Deletes old mogi objects"""
-        curr_time = datetime.now(timezone.utc)
-        mogi_lifetime = timedelta(minutes=self.MOGI_LIFETIME)
-        for mogi in self.old_events.values():
-            if curr_time - mogi_lifetime > mogi.start_time:
-                print(
-                    f"Deleting {mogi.start_time} Mogi at {curr_time}", flush=True)
-                del self.old_events[mogi.mogi_channel]
+        try:
+            curr_time = datetime.now(timezone.utc)
+            mogi_lifetime = timedelta(minutes=self.MOGI_LIFETIME)
+            for mogi in self.old_events.values():
+                if curr_time - mogi_lifetime > mogi.start_time:
+                    print(
+                        f"Deleting {mogi.start_time} Mogi at {curr_time}", flush=True)
+                    del self.old_events[mogi.mogi_channel]
+        except Exception as e:
+            print(e, flush=True)
 
     def get_event_str(self, mogi):
         mogi_time = discord.utils.format_dt(mogi.start_time, style="F")
