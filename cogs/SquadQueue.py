@@ -756,7 +756,7 @@ class SquadQueue(commands.Cog):
                         mogi.gathering = True
                         self.ongoing_events[mogi.mogi_channel] = mogi
                         await self.unlockdown(mogi.mogi_channel)
-                        await mogi.mogi_channel.send(f"A queue is gathering for the mogi {discord.utils.format_dt(mogi.start_time, style='R')} - @here Type `/c`, `/d`, or `/l`")
+                        await mogi.mogi_channel.send(f"A queue is gathering for the mogi {discord.utils.format_dt(mogi.start_time, style='R')} - @here Type `/c` to join, and `/d` to drop.")
             for ind in reversed(to_remove):
                 del guild[ind]
 
