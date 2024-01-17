@@ -306,7 +306,7 @@ class SquadQueue(commands.Cog):
                 for i in range(len(sorted_mogi_list)):
                     msg += f"{i+1}) "
                     msg += ", ".join([p.lounge_name for p in sorted_mogi_list[i].players])
-                    msg += f" ({sorted_mogi_list[i].avg_mmr:.1f} MMR)\n"
+                    msg += f" ({sorted_mogi_list[i].players[0].mmr} MMR)\n"
                 if (len(sorted_mogi_list) % (12/mogi.size) != 0):
                     num_next = int(len(sorted_mogi_list) % (12/mogi.size))
                     teams_per_room = int(12/mogi.size)
