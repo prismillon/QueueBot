@@ -824,11 +824,14 @@ class SquadQueue(commands.Cog):
         try:
             curr_time = datetime.now(timezone.utc)
             mogi_lifetime = timedelta(minutes=self.MOGI_LIFETIME)
+            delete_queue = []
             for mogi in self.old_events.values():
                 if curr_time - mogi_lifetime > mogi.start_time:
-                    print(
-                        f"Deleting {mogi.start_time} Mogi at {curr_time}", flush=True)
-                    del self.old_events[mogi.mogi_channel]
+                    delete_queue.append(mogi)
+            for mogi in delete_queue:
+                print(
+                    f"Deleting {mogi.start_time} Mogi at {curr_time}", flush=True)
+                del self.old_events[mogi.mogi_channel]
         except Exception as e:
             print(e, flush=True)
 
