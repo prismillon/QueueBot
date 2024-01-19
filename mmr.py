@@ -29,7 +29,7 @@ async def mk8dx_150cc_mmr(url, members):
                     players.append(
                         Player(member, player_data['name'], player_data['mmr']))
     except:
-        print(f"Fetch for player {players[0]} has failed.", flush=True)
+        print(f"Fetch for player {members[0]} has failed.", flush=True)
     return players
 
 
