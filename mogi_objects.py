@@ -339,21 +339,22 @@ class JoinView(View):
 
     @discord.ui.button(label="Join Room")
     async def button_callback(self, interaction, button):
+        await interaction.response.defer()
         try:
             user_mmr = await self.get_mmr(interaction.user.id)
         except:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "MMR lookup for player has failed, please try again.", ephemeral=True)
             return
         if self.room.room_num == 1:
             self.room.mmr_high = 999999
         if isinstance(user_mmr, int) and user_mmr < self.room.mmr_high + 500 and user_mmr > self.room.mmr_low - 500:
             button.disabled = True
-            await interaction.response.edit_message(view=self)
+            await interaction.followup.edit_message(interaction.message.id, view=self)
             mention = interaction.user.mention
             await self.room.thread.send(mention)
         else:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "You do not meet room requirements", ephemeral=True)
 
 
