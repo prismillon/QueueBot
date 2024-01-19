@@ -340,6 +340,11 @@ class JoinView(View):
     @discord.ui.button(label="Join Room")
     async def button_callback(self, interaction, button):
         await interaction.response.defer()
+        muted_role_id = 600495108999086090
+        if interaction.user.get_role(muted_role_id):
+            await interaction.followup.send(
+                "Players with the muted role cannot use the sub button.", ephemeral=True)
+            return
         try:
             user_mmr = await self.get_mmr(interaction.user.id)
         except:
