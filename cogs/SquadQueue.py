@@ -169,9 +169,8 @@ class SquadQueue(commands.Cog):
             players = await mk8dx_150cc_mmr(self.URL, [member])
 
             if len(players) == 0 or players[0] is None:
-                msg = f"{interaction.user.mention} MMR for the following player could not be found: "
-                msg += ", ".join(interaction.user.name)
-                msg += ". Please contact a staff member for help or try again."
+                msg = f"{interaction.user.mention} fetch for MMR has failed and joining the queue was unsuccessful.  "
+                msg += "Please try again.  If the problem continues then contact a staff member for help."
                 await interaction.followup.send(msg)
                 return
 
