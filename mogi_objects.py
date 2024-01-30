@@ -333,7 +333,7 @@ class VoteView(View):
 
 class JoinView(View):
     def __init__(self, room, get_mmr):
-        super().__init__()
+        super().__init__(timeout=1200)
         self.room = room
         self.get_mmr = get_mmr
 
@@ -357,7 +357,7 @@ class JoinView(View):
             button.disabled = True
             await interaction.followup.edit_message(interaction.message.id, view=self)
             mention = interaction.user.mention
-            await self.room.thread.send(mention)
+            await self.room.thread.send(f"{mention} has joined the room.")
         else:
             await interaction.followup.send(
                 "You do not meet room requirements", ephemeral=True)
