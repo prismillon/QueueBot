@@ -684,7 +684,12 @@ class SquadQueue(commands.Cog):
                 err_msg += mentions
                 msg += err_msg
                 room_channel = None
-            await mogi.mogi_channel.send(msg)
+            try:
+                await mogi.mogi_channel.send(msg)
+            except Exception as e:
+                print(
+                    f"Mogi Channel message for room {i+1} has failed to send.", flush=True)
+                print(e, flush=True)
         if num_teams < mogi.count_registered():
             missed_teams = mogi.confirmed_list(
             )[num_teams:mogi.count_registered()]
@@ -693,7 +698,11 @@ class SquadQueue(commands.Cog):
                 msg += f"`{i+1}.` "
                 msg += ", ".join([p.lounge_name for p in missed_teams[i].players])
                 msg += f" ({int(missed_teams[i].avg_mmr)} MMR)\n"
-            await mogi.mogi_channel.send(msg)
+            try:
+                await mogi.mogi_channel.send(msg)
+            except Exception as e:
+                print("Late Player message has failed to send.", flush=True)
+                print(e, flush=True)
         await asyncio.sleep(120)
         await self.end_voting()
         await self.write_history()
