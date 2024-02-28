@@ -176,8 +176,9 @@ class SquadQueue(commands.Cog):
 
             msg = ""
             if players[0].mmr is None:
-                players[0].mmr = 0
-                msg += f"{players[0].lounge_name} is assumed to be a new player and will be playing this mogi with a starting MMR of 0.  "
+                starting_player_mmr = 1500
+                players[0].mmr = starting_player_mmr
+                msg += f"{players[0].lounge_name} is assumed to be a new player and will be playing this mogi with a starting MMR of {starting_player_mmr}.  "
                 msg += "If you believe this is a mistake, please contact a staff member for help.\n"
 
             players[0].confirmed = True
