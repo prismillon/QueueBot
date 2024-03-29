@@ -5,6 +5,22 @@ from mogi_objects import Player
 headers = {'Content-type': 'application/json'}
 
 
+class LoungeData:
+    def __init__(self):
+        self._data = None
+
+    async def lounge_api_full(self):
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://www.mk8dx-lounge.com/api/player/list") as response:
+                if response.status == 200:
+                    _data_full = await response.json()
+                    self._data = [player for player in _data_full['players'] if "discordId" in player]
+    
+    def data(self):
+        return self._data
+
+lounge_data = LoungeData()
+
 async def mk8dx_150cc_mmr(url, members):
     base_url = url + '/api/player?'
     players = []
