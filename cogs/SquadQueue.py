@@ -173,7 +173,7 @@ class SquadQueue(commands.Cog):
                 return
 
             # players = await mk8dx_150cc_mmr(self.URL, [member])
-            player_api_result = discord.utils.find(lambda player: player['discordId'] == member.id, lounge_data.data())
+            player_api_result = discord.utils.find(lambda player: player['discordId'] == str(member.id), lounge_data.data())
 
             if not player_api_result:
                 msg = f"{interaction.user.mention} fetch for MMR has failed and joining the queue was unsuccessful.  "
@@ -191,7 +191,7 @@ class SquadQueue(commands.Cog):
                 msg += "If you believe this is a mistake, please contact a staff member for help.\n"
 
             player.confirmed = True
-            squad = Team(player)
+            squad = Team([player])
             mogi.teams.append(squad)
 
             msg += f"{player.lounge_name} joined queue for mogi {discord.utils.format_dt(mogi.start_time, style='R')}, `[{mogi.count_registered()} players]`"
