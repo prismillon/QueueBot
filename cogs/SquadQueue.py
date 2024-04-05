@@ -805,7 +805,10 @@ class SquadQueue(commands.Cog):
 
     @tasks.loop(minutes=10)
     async def lounge_mmr(self):
-        await lounge_data.lounge_api_full()
+        try:
+            await lounge_data.lounge_api_full()
+        except Exception as e:
+            print(e)
 
     async def schedule_que_event(self):
         """Schedules queue for the next hour in the given channel."""
