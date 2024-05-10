@@ -777,14 +777,16 @@ class SquadQueue(commands.Cog):
                     else:
                         if mogi.mogi_channel in self.ongoing_events.keys():
                             if self.ongoing_events[mogi.mogi_channel].started:
-                                self.old_events[mogi.mogi_channel] = self.ongoing_events[mogi.mogi_channel]
+                                # very bad but should be fine so long as the time between mogis is 1 hour
+                                key = mogi.start_time - timedelta(hours=1)
+                                self.old_events[key.hour] = self.ongoing_events[mogi.mogi_channel]
                                 del self.ongoing_events[mogi.mogi_channel]
                         to_remove.append(i)
                         mogi.started = True
                         mogi.gathering = True
                         self.ongoing_events[mogi.mogi_channel] = mogi
                         await self.unlockdown(mogi.mogi_channel)
-                        await mogi.mogi_channel.send(f"A queue is gathering for the mogi {discord.utils.format_dt(mogi.start_time, style='R')} - @here Type `/c` to join, and `/d` to drop.")
+                        await mogi.mogi_channel.send(f"A queue is gathering for the mogi {discord.utils.format_dt(mogi.start_time, style='R')} - Type `/c` to join, and `/d` to drop.")
             for ind in reversed(to_remove):
                 del guild[ind]
 
@@ -866,7 +868,7 @@ class SquadQueue(commands.Cog):
             for mogi in delete_queue:
                 print(
                     f"Deleting {mogi.start_time} Mogi at {curr_time}", flush=True)
-                del self.old_events[mogi.mogi_channel]
+                del self.old_events[mogi.start_time.hour]
         except Exception as e:
             print(e, flush=True)
 
