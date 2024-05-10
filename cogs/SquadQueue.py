@@ -79,6 +79,14 @@ class SquadQueue(commands.Cog):
             self.bot.config["queue_list_channel"])
         self.HISTORY_CHANNEL = self.bot.get_channel(
             self.bot.config["queue_history_channel"])
+        try:
+            await self.LIST_CHANNEL.purge()
+        except:
+            print("Purging List channel failed", flush=True)
+        try:
+            await self.SUB_CHANNEL.purge()
+        except:
+            print("Purging Sub channel failed", flush=True)
         print(f"Server - {self.GUILD}", flush=True)
         print(f"Join Channel - {self.MOGI_CHANNEL}", flush=True)
         print(f"Sub Channel - {self.SUB_CHANNEL}", flush=True)
