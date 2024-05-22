@@ -354,7 +354,7 @@ class SquadQueue(commands.Cog):
                         new_messages.append(bulk_msg)
                         bulk_msg = ""
                     bulk_msg += message[i] + "\n"
-                if len(bulk_msg) > 0:
+                if len(bulk_msg) > 0 and bulk_msg != "\n":
                     new_messages.append(bulk_msg)
 
                 await self.delete_list_messages(len(new_messages))
