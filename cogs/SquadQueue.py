@@ -321,7 +321,7 @@ class SquadQueue(commands.Cog):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message("Wait before using `/l` command", ephemeral=True)
 
-    @tasks.loop(minutes=1)
+    @tasks.loop(seconds=30)
     async def list_task(self):
         """Continually display the list of confirmed players for a mogi in the history channel"""
         if len(self.ongoing_events) > 0:
