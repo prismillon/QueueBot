@@ -330,6 +330,8 @@ class SquadQueue(commands.Cog):
                     await self.delete_list_messages(0)
                     return
 
+                mogi.update_late_players()
+
                 mogi_list = mogi.confirmed_list()
 
                 sorted_mogi_list = sorted(mogi_list, reverse=True)
@@ -338,7 +340,12 @@ class SquadQueue(commands.Cog):
                 for i in range(len(sorted_mogi_list)):
                     msg += f"{i+1}) "
                     msg += ", ".join([p.lounge_name for p in sorted_mogi_list[i].players])
-                    msg += f" ({sorted_mogi_list[i].players[0].mmr} MMR)\n"
+                    is_late_player = sorted_mogi_list[i].get_lateness()
+                    msg += f" ({sorted_mogi_list[i].players[0].mmr} MMR)"
+                    if is_late_player:
+                        msg += " (late)\n"
+                    else:
+                        msg += "\n"
                     if ((i + 1) % 12 == 0):
                         msg += "ㅤ\n"
                 if (len(sorted_mogi_list) % (12/mogi.size) != 0):

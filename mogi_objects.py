@@ -40,6 +40,14 @@ class Mogi:
                 confirmed.append(team)
         return confirmed
 
+    def update_late_players(self):
+        late_player_cutoff = int(len(self.teams) / 12) * 12
+        for idx, team in enumerate(self.teams):
+            lateness = False
+            if idx >= late_player_cutoff:
+                lateness = True
+            team.set_lateness(lateness)
+
     def remove_id(self, squad_id: int):
         confirmed = self.confirmed_list()
         if squad_id < 1 or squad_id > len(confirmed):
@@ -77,6 +85,7 @@ class Team:
     def __init__(self, players):
         self.players = players
         self.avg_mmr = sum([p.mmr for p in self.players]) / len(self.players)
+        self.late = False
 
     def recalc_avg(self):
         self.avg_mmr = sum([p.mmr for p in self.players]) / len(self.players)
@@ -122,6 +131,12 @@ class Team:
             if not player.confirmed:
                 unconfirmed.append(player)
         return unconfirmed
+
+    def set_lateness(self, is_late):
+        self.late = is_late
+
+    def get_lateness(self):
+        return self.late
 
     def __lt__(self, other):
         if self.avg_mmr < other.avg_mmr:
