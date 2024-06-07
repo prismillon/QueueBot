@@ -56,6 +56,8 @@ class SquadQueue(commands.Cog):
 
         self.SUB_MESSAGE_LIFETIME_SECONDS = bot.config["SUB_MESSAGE_LIFETIME_SECONDS"]
 
+        self.SIX_VS_SIX_THRESHOLD = bot.config["SIX_VS_SIX_THRESHOLD"]
+
         # number of minutes before scheduled time that queue should open
         self.QUEUE_OPEN_TIME = timedelta(minutes=bot.config["QUEUE_OPEN_TIME"])
 
@@ -705,9 +707,13 @@ class SquadQueue(commands.Cog):
                 msg += f" ({int(team.avg_mmr)} MMR)\n"
                 mentions += " ".join([p.member.mention for p in team.players])
                 mentions += " "
+            avg_mmr = round(sum([p.mmr for p in player_list]) / 12)
             room_msg = msg
             mentions += " ".join([m.mention for m in extra_members if m is not None])
-            room_msg += "\nVote for format FFA, 2v2, 3v3, or 4v4.\n"
+            if avg_mmr > self.SIX_VS_SIX_THRESHOLD:
+                room_msg += "\nVote for format FFA, 2v2, 3v3, 4v4 or 6v6.\n"
+            else:
+                room_msg += "\nVote for format FFA, 2v2, 3v3, 4v4.\n"
             room_msg += "\nIf you need staff's assistance, use the `!staff` command in this channel.\n"
             room_msg += mentions
             try:
@@ -715,7 +721,8 @@ class SquadQueue(commands.Cog):
                 room_channel = curr_room.thread
                 curr_room.teams = sorted_list[start_index:start_index+teams_per_room]
                 await room_channel.send(room_msg)
-                view = VoteView(player_list, room_channel, mogi)
+                view = VoteView(player_list, room_channel,
+                                mogi, self.SIX_VS_SIX_THRESHOLD)
                 curr_room.view = view
                 curr_room.mmr_low = player_list[11].mmr
                 curr_room.mmr_high = player_list[0].mmr
